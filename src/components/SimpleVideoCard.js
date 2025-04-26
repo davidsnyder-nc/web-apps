@@ -60,8 +60,8 @@ const SimpleVideoCard = ({
     <div className="simple-video-card">
       <div className="simple-video-header">
         <div className="simple-video-title">
-          <h3>{video.name}</h3>
-          <p>{(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}</p>
+          <h3 title={video.name}>{video.name}</h3>
+          <p>{(video.size / (1024 * 1024)).toFixed(2)} MB{video.lastModified ? ` • ${video.lastModified}` : ''}</p>
         </div>
         <div className="simple-video-select">
           <label 
@@ -71,7 +71,7 @@ const SimpleVideoCard = ({
           >
             <input 
               type="checkbox" 
-              checked={isSelected} 
+              checked={isSelected || false}
               onChange={handleCheckboxChange}
               id={`select-video-${video.id}`}
             />
