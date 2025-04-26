@@ -1,0 +1,48 @@
+modules = ["nodejs-20"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["glib", "nss", "dbus", "atk", "cups", "gtk3", "mesa"]
+
+[workflows]
+runButton = "Video Collage Web App Dev"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Video Collage Web App"
+
+[[workflows.workflow]]
+name = "Video Collage Web App"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx react-scripts start"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "Video Collage Web App Dev"
+author = 41930836
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=5000 npx react-scripts start"
+
+[deployment]
+run = ["sh", "-c", "node serve.js"]
+build = ["sh", "-c", "node build.js"]
+deploymentTarget = "cloudrun"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 5001
+externalPort = 3000

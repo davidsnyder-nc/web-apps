@@ -1,0 +1,20 @@
+{
+  "name": "video-collage-maker",
+  "description": "Create looping video collages in 16:9 format with multiple layout options and selective audio control",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "NODE_ENV=development electron ."
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "electron": "^30.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "uuid": "^11.1.0"
+  }
+}
