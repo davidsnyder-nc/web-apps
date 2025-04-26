@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import VideoCatalog from './VideoCatalog';
 import { VideoCatalogIcon } from './assets/video-catalog-icon';
+import { VideoCollageIcon } from './assets/video-collage-icon';
 import './index.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -21,11 +22,12 @@ root.render(
           <main>
             <div className="apps-grid">
               <a href="/video-collage" className="app-card">
+                <div className="app-icon" dangerouslySetInnerHTML={{ __html: VideoCollageIcon }} />
                 <h2>Video Collage</h2>
                 <p>Create dynamic video collages with multiple layouts</p>
               </a>
               <a href="/video-catalog" className="app-card">
-                <div dangerouslySetInnerHTML={{ __html: VideoCatalogIcon }} style={{ width: '64px', height: '64px', margin: '0 auto 1rem' }} />
+                <div className="app-icon" dangerouslySetInnerHTML={{ __html: VideoCatalogIcon }} />
                 <h2>Video Catalog</h2>
                 <p>Organize and browse your video collection</p>
               </a>
