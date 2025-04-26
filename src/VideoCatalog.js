@@ -1,584 +1,369 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactPlayer from 'react-player';
 import './VideoCatalog.css';
 import SimpleVideoCard from './components/SimpleVideoCard';
+import { v4 as uuidv4 } from 'uuid';
+import { VideoCatalogIcon } from './assets/video-catalog-icon';
 
-// Image Card Component with Thumbnail Generation
-const ImageCard = ({ image, viewImage, truncateFileName, isPinned, onTogglePin }) => {
-  const [thumbnail, setThumbnail] = useState(null);
-  const [loading, setLoading] = useState(true);
-  
-  // Truncate file name if it's too long
-  const displayName = truncateFileName ? truncateFileName(image.name) : image.name;
-  
-  useEffect(() => {
-    const generateThumbnail = async () => {
-      try {
-        let imageFile;
-        
-        if (image.isLegacyFile && image.file) {
-          // Safari fallback
-          imageFile = image.file;
-        } else {
-          // File System Access API
-          imageFile = await image.handle.getFile();
-        }
-        
-        // Create a URL for the image file
-        const url = URL.createObjectURL(imageFile);
-        setThumbnail(url);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error generating image thumbnail:', err);
-        setLoading(false);
-      }
-    };
-    
-    generateThumbnail();
-    
-    // Clean up
-    return () => {
-      if (thumbnail) {
-        URL.revokeObjectURL(thumbnail);
-      }
-    };
-  }, [image]);
-  
-  // Handle pin toggle with event stopPropagation
-  const handlePinToggle = (e) => {
-    e.stopPropagation();
-    if (onTogglePin) {
-      onTogglePin(image.id);
-    }
-  };
-  
-  return (
-    <div 
-      className={`image-card ${isPinned ? 'pinned' : ''}`}
-      onClick={() => viewImage(image)}
-    >
-      <div className="image-placeholder">
-        {loading ? (
-          <div className="image-icon">🖼️</div>
-        ) : (
-          <img 
-            src={thumbnail} 
-            alt={image.name} 
-            className="image-thumbnail" 
-          />
-        )}
-        {!loading && (
-          <button 
-            className={`pin-button ${isPinned ? 'pinned' : ''}`}
-            onClick={handlePinToggle}
-            title={isPinned ? 'Unpin image' : 'Pin image'}
-          >
-            {isPinned ? '📌' : '📍'}
-          </button>
-        )}
-      </div>
-      <div className="image-info">
-        <p className="image-name" title={image.name}>{displayName}</p>
-        <p className="file-details">
-          {(image.size / (1024 * 1024)).toFixed(2)} MB
-        </p>
-      </div>
-    </div>
-  );
-};
-
-// Ultra-basic Video Card Component
-const VideoCard = ({ video, createCollage }) => {
-  const [videoUrl, setVideoUrl] = useState('');
-  
-  // Function to load the video file when needed
-  const handleLoadVideo = async () => {
-    try {
-      if (videoUrl) return; // Already loaded
-      
-      // Get the file
-      let file;
-      if (video.isLegacyFile && video.file) {
-        file = video.file;
-      } else {
-        file = await video.handle.getFile();
-      }
-      
-      // Create object URL
-      const url = URL.createObjectURL(file);
-      setVideoUrl(url);
-    } catch (error) {
-      console.error("Failed to load video:", error);
-    }
-  };
-  
-  // Load video on mount
-  useEffect(() => {
-    handleLoadVideo();
-    
-    // Cleanup when component unmounts
-    return () => {
-      if (videoUrl) {
-        URL.revokeObjectURL(videoUrl);
-      }
-    };
-  }, []);
-  
-  return (
-    <div className="video-card">
-      <div className="video-info">
-        <h3>{video.name}</h3>
-        <p className="file-details">
-          {(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}
-        </p>
-        
-        {/* Main video container */}
-        <div style={{marginTop: '10px', marginBottom: '10px'}}>
-          {videoUrl ? (
-            <video 
-              src={videoUrl}
-              controls
-              width="100%"
-              height="auto"
-            />
-          ) : (
-            <div className="video-placeholder" onClick={handleLoadVideo}>
-              <div className="play-icon">▶</div>
-              <div>Click to load video</div>
-            </div>
-          )}
-        </div>
-        
-        <div className="video-actions">
-          <button onClick={() => createCollage(video)}>
-            Create Collage
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+// Set to true to use the File System Access API (for modern browsers)
+// Set to false to use the legacy file input method (for older browsers)
+const USE_FILE_SYSTEM_ACCESS_API = true;
 
 function VideoCatalog() {
-  const [currentDirectory, setCurrentDirectory] = useState(null);
+  // State for directory browsing
   const [directoryHandle, setDirectoryHandle] = useState(null);
-  const [directoryItems, setDirectoryItems] = useState([]);
-  const [currentPath, setCurrentPath] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [directoryPath, setDirectoryPath] = useState([]);
+  const [currentDirectoryName, setCurrentDirectoryName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const videoPlayerRef = useRef(null);
-  const [selectedVideo, setSelectedVideo] = useState(null);
-  // Track videos selected for collage
-  const [selectedVideosForCollage, setSelectedVideosForCollage] = useState([]);
-  const [hasPermission, setHasPermission] = useState(false);
   
-  // Define supported file types
-  const supportedVideoTypes = [
-    'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 
-    'video/x-msvideo', 'video/x-matroska', 'video/x-ms-wmv'
-  ];
+  // State for directory contents
+  const [directories, setDirectories] = useState([]);
+  const [allVideos, setAllVideos] = useState([]);
+  const [displayedVideos, setDisplayedVideos] = useState([]);
+  const [allImages, setAllImages] = useState([]);
+  const [displayedImages, setDisplayedImages] = useState([]);
+  const [otherFiles, setOtherFiles] = useState([]);
   
-  const supportedImageTypes = [
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 
-    'image/svg+xml', 'image/bmp', 'image/tiff'
-  ];
-
-  // Check if File System Access API is available
-  const isFileSystemAccessSupported = () => {
-    return 'showDirectoryPicker' in window;
-  };
-
-  // Handle file input for Safari and other browsers without File System Access API
-  const handleFileInputSelection = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const items = [];
-      
-      // Process each file
-      files.forEach(file => {
-        if (supportedVideoTypes.includes(file.type)) {
-          // It's a video file
-          items.push({
-            id: Math.random().toString(36).substr(2, 9),
-            name: file.name,
-            type: 'video',
-            file: file, // Store the actual file for Safari
-            fileType: file.type,
-            size: file.size,
-            lastModified: new Date(file.lastModified).toLocaleDateString(),
-            duration: 'Unknown',
-            path: file.name,
-            isLegacyFile: true // Flag to indicate this is from file input, not directory API
-          });
-        } else if (supportedImageTypes.includes(file.type)) {
-          // It's an image file
-          items.push({
-            id: Math.random().toString(36).substr(2, 9),
-            name: file.name,
-            type: 'image',
-            file: file, // Store the actual file for Safari
-            fileType: file.type,
-            size: file.size,
-            lastModified: new Date(file.lastModified).toLocaleDateString(),
-            path: file.name,
-            isLegacyFile: true // Flag to indicate this is from file input, not directory API
-          });
-        }
-      });
-      
-      // Sort by name
-      items.sort((a, b) => a.name.localeCompare(b.name));
-      
-      // Set the directory items
-      setDirectoryItems(items);
-      setCurrentDirectory('Selected Files');
-      setCurrentPath(['Selected Files']);
-    } catch (err) {
-      setError(`Error processing files: ${err.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Open directory picker
-  const handleSelectDirectory = async () => {
-    if (isFileSystemAccessSupported()) {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        // Show directory picker
-        const dirHandle = await window.showDirectoryPicker({
-          mode: 'read'
-        });
-        
-        setDirectoryHandle(dirHandle);
-        setCurrentDirectory(dirHandle.name);
-        setCurrentPath([dirHandle.name]);
-        setHasPermission(true);
-        
-        // Scan the directory
-        await scanDirectory(dirHandle);
-        
-        // Store directory ID if available
-        if ('id' in FileSystemHandle.prototype) {
-          localStorage.setItem('selectedDirectoryId', dirHandle.id);
-        }
-      } catch (err) {
-        // User cancelled or error occurred
-        if (err.name !== 'AbortError') {
-          setError(`Error accessing directory: ${err.message}`);
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      // Safari fallback: use file input with 'webkitdirectory' attribute when possible
-      // or just allow multiple file selection
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.multiple = true; // Allow selecting multiple files
-      input.accept = supportedVideoTypes.concat(supportedImageTypes).join(',');
-      input.onchange = handleFileInputSelection;
-      input.click();
-    }
-  };
-
-  // Scan directory for files and subdirectories
-  const scanDirectory = async (dirHandle, currentItems = []) => {
-    setIsLoading(true);
-    const items = [];
-    
-    try {
-      // Iterate through the directory entries
-      for await (const entry of dirHandle.values()) {
-        if (entry.kind === 'directory') {
-          // It's a directory
-          items.push({
-            id: Math.random().toString(36).substr(2, 9),
-            name: entry.name,
-            type: 'directory',
-            handle: entry,
-            path: [...currentPath, entry.name].join('/')
-          });
-        } else if (entry.kind === 'file') {
-          // It's a file - check if it's a supported type
-          const file = await entry.getFile();
-          
-          if (supportedVideoTypes.includes(file.type)) {
-            // It's a video file
-            items.push({
-              id: Math.random().toString(36).substr(2, 9),
-              name: entry.name,
-              type: 'video',
-              handle: entry,
-              fileType: file.type,
-              size: file.size,
-              lastModified: new Date(file.lastModified).toLocaleDateString(),
-              duration: 'Unknown', // Will be populated when file is loaded
-              path: [...currentPath, entry.name].join('/')
-            });
-          } else if (supportedImageTypes.includes(file.type)) {
-            // It's an image file
-            items.push({
-              id: Math.random().toString(36).substr(2, 9),
-              name: entry.name,
-              type: 'image',
-              handle: entry,
-              fileType: file.type,
-              size: file.size,
-              lastModified: new Date(file.lastModified).toLocaleDateString(),
-              path: [...currentPath, entry.name].join('/')
-            });
-          }
-        }
-      }
-      
-      // Sort items: directories first, then files alphabetically
-      items.sort((a, b) => {
-        if (a.type === 'directory' && b.type !== 'directory') return -1;
-        if (a.type !== 'directory' && b.type === 'directory') return 1;
-        return a.name.localeCompare(b.name);
-      });
-      
-      setDirectoryItems(items);
-    } catch (err) {
-      setError(`Error scanning directory: ${err.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Navigate to a subdirectory
-  const navigateToDirectory = async (item) => {
-    if (item.type !== 'directory') return;
-    
-    setIsLoading(true);
-    try {
-      setCurrentDirectory(item.name);
-      setCurrentPath([...currentPath, item.name]);
-      await scanDirectory(item.handle);
-    } catch (err) {
-      setError(`Error navigating to directory: ${err.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Navigate up one level
-  const navigateUp = async () => {
-    if (currentPath.length <= 1 || !directoryHandle) return;
-    
-    setIsLoading(true);
-    try {
-      const newPath = [...currentPath];
-      newPath.pop();
-      setCurrentPath(newPath);
-      setCurrentDirectory(newPath[newPath.length - 1]);
-      
-      // Navigate back to the parent directory
-      let parentHandle = directoryHandle;
-      // Skip the first item as it's the root directory handle we already have
-      for (let i = 1; i < newPath.length - 1; i++) {
-        parentHandle = await parentHandle.getDirectoryHandle(newPath[i]);
-      }
-      
-      await scanDirectory(parentHandle);
-    } catch (err) {
-      setError(`Error navigating up: ${err.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // State for video playback
+  const [currentVideo, setCurrentVideo] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
-  // Navigate to a specific point in the breadcrumb
-  const navigateToBreadcrumb = async (index) => {
-    if (!directoryHandle) return;
-    if (index === currentPath.length - 1) return; // Already at this location
-    
-    setIsLoading(true);
-    try {
-      // Create a new path up to the clicked breadcrumb item
-      const newPath = currentPath.slice(0, index + 1);
-      setCurrentPath(newPath);
-      setCurrentDirectory(newPath[newPath.length - 1]);
-      
-      // Navigate to the selected directory
-      let targetHandle = directoryHandle;
-      // Skip the first item as it's the root directory handle we already have
-      for (let i = 1; i < newPath.length; i++) {
-        targetHandle = await targetHandle.getDirectoryHandle(newPath[i]);
-      }
-      
-      await scanDirectory(targetHandle);
-    } catch (err) {
-      setError(`Error navigating to directory: ${err.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Toggle video selection for collage
-  const toggleVideoSelection = (videoId, isSelected) => {
-    if (isSelected) {
-      // Add to selected videos
-      setSelectedVideosForCollage(prevSelected => [...prevSelected, videoId]);
-    } else {
-      // Remove from selected videos
-      setSelectedVideosForCollage(prevSelected => 
-        prevSelected.filter(id => id !== videoId)
-      );
-    }
-  };
-  
-  // Create a video collage from all selected videos
-  const createCollageFromSelected = async () => {
-    if (selectedVideosForCollage.length === 0) return;
-    
-    try {
-      // Find all selected video objects
-      const selectedVideos = videos.filter(video => 
-        selectedVideosForCollage.includes(video.id)
-      );
-      
-      // Process each video to get URLs
-      const collageVideos = await Promise.all(selectedVideos.map(async (video) => {
-        let url;
-        
-        if (video.isLegacyFile && video.file) {
-          // Safari fallback: use the file directly
-          url = URL.createObjectURL(video.file);
-        } else {
-          // File System Access API
-          const file = await video.handle.getFile();
-          url = URL.createObjectURL(file);
-        }
-        
-        return {
-          id: video.id,
-          name: video.name,
-          url
-        };
-      }));
-      
-      // Store the video URLs in localStorage
-      localStorage.setItem('collageVideos', JSON.stringify(collageVideos));
-      
-      // Redirect to video collage app
-      window.location.href = '/video-collage';
-    } catch (err) {
-      setError(`Error creating collage: ${err.message}`);
-    }
-  };
-
-  // State for selected image viewer
-  const [selectedImage, setSelectedImage] = useState(null);
+  // State for image viewing
+  const [currentImage, setCurrentImage] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isViewingImage, setIsViewingImage] = useState(false);
+  
   // State for pinned image
   const [pinnedImage, setPinnedImage] = useState(null);
   const [pinnedImageIds, setPinnedImageIds] = useState([]);
   
-  // View an image in the modal viewer
-  const viewImage = async (item) => {
-    if (item.type !== 'image') return;
-    
+  // State for search and pagination
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20);
+  
+  // Ref for keyboard navigation
+  const keyboardNavRef = useRef(null);
+  
+  // Function to select a directory using the File System Access API
+  const selectDirectory = async () => {
     try {
-      let url;
+      // Request user to select a directory
+      const dirHandle = await window.showDirectoryPicker();
       
-      if (item.isLegacyFile && item.file) {
-        // Safari fallback: use the file directly
-        url = URL.createObjectURL(item.file);
-      } else {
-        // File System Access API
-        const file = await item.handle.getFile();
-        url = URL.createObjectURL(file);
-      }
+      // Save the directory handle in state
+      setDirectoryHandle(dirHandle);
+      setCurrentDirectoryName(dirHandle.name);
+      setDirectoryPath([{ name: dirHandle.name, handle: dirHandle }]);
       
-      // Find the index of the selected image
-      const imageIndex = allImages.findIndex(img => img.id === item.id);
-      setCurrentImageIndex(imageIndex);
+      // Store the directory ID for later use
+      localStorage.setItem('selectedDirectoryId', dirHandle.name);
       
-      // Set the selected image for the modal
-      setSelectedImage({
-        ...item,
-        url
-      });
+      // Load the directory contents
+      setIsLoading(true);
+      await loadDirectoryContents(dirHandle);
+      setIsLoading(false);
     } catch (err) {
-      setError(`Error viewing image: ${err.message}`);
+      console.error('Error selecting directory:', err);
+      if (err.name === 'AbortError') {
+        // User canceled the directory picker
+        setError(null);
+      } else {
+        setError(`Error selecting directory: ${err.message}`);
+      }
+      setIsLoading(false);
     }
   };
   
-  // Navigate to previous image
-  const viewPreviousImage = async () => {
-    if (!selectedImage) return;
+  // Function to use the legacy file input method
+  const selectFilesLegacy = (event) => {
+    const files = event.target.files;
     
-    const prevIndex = (currentImageIndex - 1 + allImages.length) % allImages.length;
-    const prevImage = allImages[prevIndex];
-    
-    // Clean up current image URL
-    if (selectedImage.url) {
-      URL.revokeObjectURL(selectedImage.url);
+    if (files.length === 0) {
+      return;
     }
     
-    // Load the previous image
-    try {
-      let url;
-      if (prevImage.isLegacyFile && prevImage.file) {
-        url = URL.createObjectURL(prevImage.file);
-      } else {
-        const file = await prevImage.handle.getFile();
-        url = URL.createObjectURL(file);
+    // Process the selected files
+    setIsLoading(true);
+    
+    // Extract the directory name from the first file's path
+    const firstFilePath = files[0].webkitRelativePath;
+    const dirName = firstFilePath.split('/')[0];
+    
+    setCurrentDirectoryName(dirName);
+    setDirectoryPath([{ name: dirName, isLegacyDirectory: true }]);
+    
+    // Process files
+    processLegacyFiles(files);
+    
+    setIsLoading(false);
+  };
+  
+  // Process files selected via the legacy method
+  const processLegacyFiles = (files) => {
+    const videos = [];
+    const images = [];
+    const dirs = new Map();
+    const others = [];
+    
+    // Group files by their directory
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const pathParts = file.webkitRelativePath.split('/');
+      
+      // Skip the root directory itself
+      if (pathParts.length <= 1) continue;
+      
+      // If this is a subdirectory (depth > 1)
+      if (pathParts.length > 2) {
+        const dirName = pathParts[1];
+        if (!dirs.has(dirName)) {
+          dirs.set(dirName, {
+            name: dirName,
+            isLegacyDirectory: true,
+            path: [pathParts[0], dirName]
+          });
+        }
+        continue;
       }
       
-      setCurrentImageIndex(prevIndex);
-      setSelectedImage({
-        ...prevImage,
-        url
-      });
+      // This is a file in the root directory
+      const fileName = pathParts[pathParts.length - 1];
+      const fileExt = fileName.split('.').pop().toLowerCase();
+      
+      // Create a unique ID for the file
+      const fileId = uuidv4();
+      
+      // Create a file object with metadata
+      const fileObj = {
+        id: fileId,
+        name: fileName,
+        type: file.type,
+        size: file.size,
+        lastModified: new Date(file.lastModified).toLocaleString(),
+        file: file,
+        isLegacyFile: true,
+      };
+      
+      // Categorize the file based on its type
+      if (file.type.startsWith('video/')) {
+        videos.push(fileObj);
+      } else if (file.type.startsWith('image/')) {
+        images.push(fileObj);
+      } else {
+        others.push(fileObj);
+      }
+    }
+    
+    // Update state with the processed files
+    setDirectories(Array.from(dirs.values()));
+    setAllVideos(videos);
+    setDisplayedVideos(videos.slice(0, itemsPerPage));
+    setAllImages(images);
+    setDisplayedImages(images.slice(0, itemsPerPage));
+    setOtherFiles(others);
+    setCurrentPage(1);
+  };
+  
+  // Function to load the contents of a directory
+  const loadDirectoryContents = async (dirHandle) => {
+    try {
+      const videos = [];
+      const images = [];
+      const dirs = [];
+      const others = [];
+      
+      // Iterate through all entries in the directory
+      for await (const entry of dirHandle.values()) {
+        if (entry.kind === 'directory') {
+          // This is a subdirectory
+          dirs.push({
+            name: entry.name,
+            handle: entry,
+          });
+        } else if (entry.kind === 'file') {
+          // This is a file - get its metadata
+          const file = await entry.getFile();
+          const fileName = entry.name;
+          const fileExt = fileName.split('.').pop().toLowerCase();
+          
+          // Create a unique ID for the file
+          const fileId = uuidv4();
+          
+          // Create a file object with metadata
+          const fileObj = {
+            id: fileId,
+            name: fileName,
+            type: file.type,
+            size: file.size,
+            lastModified: new Date(file.lastModified).toLocaleString(),
+            handle: entry,
+          };
+          
+          // Categorize the file based on its type
+          if (file.type.startsWith('video/')) {
+            videos.push(fileObj);
+          } else if (file.type.startsWith('image/')) {
+            images.push(fileObj);
+          } else {
+            others.push(fileObj);
+          }
+        }
+      }
+      
+      // Update state with the directory contents
+      setDirectories(dirs);
+      setAllVideos(videos);
+      setDisplayedVideos(videos.slice(0, itemsPerPage));
+      setAllImages(images);
+      setDisplayedImages(images.slice(0, itemsPerPage));
+      setOtherFiles(others);
+      setCurrentPage(1);
     } catch (err) {
-      setError(`Error viewing previous image: ${err.message}`);
+      console.error('Error reading directory:', err);
+      setError(`Error reading directory: ${err.message}`);
     }
   };
   
-  // Navigate to next image
-  const viewNextImage = async () => {
-    if (!selectedImage) return;
+  // Function to navigate into a subdirectory
+  const navigateToDirectory = async (dirIndex) => {
+    try {
+      setIsLoading(true);
+      
+      const dir = directories[dirIndex];
+      
+      if (dir.isLegacyDirectory) {
+        // For legacy directories, we can't navigate deeper
+        setError("Cannot navigate deeper with the legacy file input method. Please use a modern browser that supports the File System Access API.");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Update the directory path
+      setDirectoryPath(prevPath => [...prevPath, dir]);
+      setCurrentDirectoryName(dir.name);
+      
+      // Load the contents of the selected directory
+      await loadDirectoryContents(dir.handle);
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error navigating to directory:', err);
+      setError(`Error navigating to directory: ${err.message}`);
+      setIsLoading(false);
+    }
+  };
+  
+  // Function to navigate to a specific directory in the path
+  const navigateToPathIndex = async (pathIndex) => {
+    if (pathIndex >= directoryPath.length) return;
     
+    try {
+      setIsLoading(true);
+      
+      // Get the directory at the specified path index
+      const dir = directoryPath[pathIndex];
+      
+      if (dir.isLegacyDirectory && pathIndex > 0) {
+        // For legacy directories, we can't navigate
+        setError("Cannot navigate with the legacy file input method. Please use a modern browser that supports the File System Access API.");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Update the directory path
+      setDirectoryPath(directoryPath.slice(0, pathIndex + 1));
+      setCurrentDirectoryName(dir.name);
+      
+      // Load the contents of the selected directory
+      if (dir.handle) {
+        await loadDirectoryContents(dir.handle);
+      }
+      
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error navigating to path:', err);
+      setError(`Error navigating to path: ${err.message}`);
+      setIsLoading(false);
+    }
+  };
+  
+  // Function to navigate up one level in the directory hierarchy
+  const navigateUp = async () => {
+    if (directoryPath.length <= 1) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Get the parent directory
+      const parentDir = directoryPath[directoryPath.length - 2];
+      
+      // Update the directory path
+      setDirectoryPath(directoryPath.slice(0, directoryPath.length - 1));
+      setCurrentDirectoryName(parentDir.name);
+      
+      // Load the contents of the parent directory
+      if (parentDir.handle) {
+        await loadDirectoryContents(parentDir.handle);
+      }
+      
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error navigating up:', err);
+      setError(`Error navigating up: ${err.message}`);
+      setIsLoading(false);
+    }
+  };
+  
+  // Function to open a video file for playback
+  const openVideo = (videoIndex) => {
+    setCurrentVideo(allVideos[videoIndex]);
+    setIsFullscreen(true);
+  };
+  
+  // Function to close the fullscreen video player
+  const closeVideoPlayer = () => {
+    setIsFullscreen(false);
+    setCurrentVideo(null);
+  };
+  
+  // Function to open an image for viewing
+  const openImage = (imageIndex) => {
+    setCurrentImageIndex(imageIndex);
+    setCurrentImage(allImages[imageIndex]);
+    setIsViewingImage(true);
+  };
+  
+  // Function to close the image viewer
+  const closeImageViewer = () => {
+    setIsViewingImage(false);
+    
+    // Keep the URL objects valid until we're done with them
+    setTimeout(() => {
+      if (currentImage && currentImage.objectUrl) {
+        URL.revokeObjectURL(currentImage.objectUrl);
+      }
+      setCurrentImage(null);
+    }, 300);
+  };
+  
+  // Function to navigate to the next image in the viewer
+  const nextImage = useCallback(() => {
+    if (!allImages.length) return;
     const nextIndex = (currentImageIndex + 1) % allImages.length;
-    const nextImage = allImages[nextIndex];
-    
-    // Clean up current image URL
-    if (selectedImage.url) {
-      URL.revokeObjectURL(selectedImage.url);
-    }
-    
-    // Load the next image
-    try {
-      let url;
-      if (nextImage.isLegacyFile && nextImage.file) {
-        url = URL.createObjectURL(nextImage.file);
-      } else {
-        const file = await nextImage.handle.getFile();
-        url = URL.createObjectURL(file);
-      }
-      
-      setCurrentImageIndex(nextIndex);
-      setSelectedImage({
-        ...nextImage,
-        url
-      });
-    } catch (err) {
-      setError(`Error viewing next image: ${err.message}`);
-    }
-  };
+    setCurrentImageIndex(nextIndex);
+    setCurrentImage(allImages[nextIndex]);
+  }, [allImages, currentImageIndex]);
   
-  // Toggle image pin state
+  // Function to navigate to the previous image in the viewer
+  const prevImage = useCallback(() => {
+    if (!allImages.length) return;
+    const prevIndex = (currentImageIndex - 1 + allImages.length) % allImages.length;
+    setCurrentImageIndex(prevIndex);
+    setCurrentImage(allImages[prevIndex]);
+  }, [allImages, currentImageIndex]);
+  
+  // Function to toggle the pinned status of an image
   const togglePinImage = async (imageId) => {
     // Check if we already have this image pinned
     if (pinnedImageIds.includes(imageId)) {
@@ -610,43 +395,88 @@ function VideoCatalog() {
           url = URL.createObjectURL(file);
         }
         
-        // Add to pinned image IDs
-        setPinnedImageIds(prevIds => [...prevIds, imageId]);
-        
-        // If we already have a pinned image, clean it up
-        if (pinnedImage && pinnedImage.url) {
-          URL.revokeObjectURL(pinnedImage.url);
-        }
-        
-        // Set as pinned image
         setPinnedImage({
           ...imageToPin,
-          url
+          url: url
         });
+        
+        // Add to pinned IDs
+        setPinnedImageIds(prevIds => [...prevIds, imageId]);
       } catch (err) {
+        console.error('Error pinning image:', err);
         setError(`Error pinning image: ${err.message}`);
       }
     }
   };
   
-  // Handle keyboard navigation in image viewer
+  // Function to handle search filtering
+  const handleSearch = () => {
+    if (!searchTerm.trim()) {
+      // If search is empty, show all videos and images
+      setDisplayedVideos(allVideos.slice(0, itemsPerPage));
+      setDisplayedImages(allImages.slice(0, itemsPerPage));
+      setCurrentPage(1);
+      return;
+    }
+    
+    // Filter videos and images by name
+    const searchLower = searchTerm.toLowerCase();
+    
+    const filteredVideos = allVideos.filter(video => 
+      video.name.toLowerCase().includes(searchLower)
+    );
+    
+    const filteredImages = allImages.filter(image => 
+      image.name.toLowerCase().includes(searchLower)
+    );
+    
+    // Update displayed files
+    setDisplayedVideos(filteredVideos.slice(0, itemsPerPage));
+    setDisplayedImages(filteredImages.slice(0, itemsPerPage));
+    setCurrentPage(1);
+  };
+  
+  // Function to handle pagination
+  const handlePageChange = (newPage) => {
+    const startIndex = (newPage - 1) * itemsPerPage;
+    
+    if (!searchTerm.trim()) {
+      // If no search, paginate all files
+      setDisplayedVideos(allVideos.slice(startIndex, startIndex + itemsPerPage));
+      setDisplayedImages(allImages.slice(startIndex, startIndex + itemsPerPage));
+    } else {
+      // If searching, paginate filtered files
+      const searchLower = searchTerm.toLowerCase();
+      
+      const filteredVideos = allVideos.filter(video => 
+        video.name.toLowerCase().includes(searchLower)
+      );
+      
+      const filteredImages = allImages.filter(image => 
+        image.name.toLowerCase().includes(searchLower)
+      );
+      
+      setDisplayedVideos(filteredVideos.slice(startIndex, startIndex + itemsPerPage));
+      setDisplayedImages(filteredImages.slice(startIndex, startIndex + itemsPerPage));
+    }
+    
+    setCurrentPage(newPage);
+  };
+  
+  // Effect to handle keyboard navigation for image viewer
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!selectedImage) return;
+      if (!isViewingImage) return;
       
       switch (e.key) {
-        case 'ArrowLeft':
-          viewPreviousImage();
-          break;
         case 'ArrowRight':
-          viewNextImage();
+          nextImage();
+          break;
+        case 'ArrowLeft':
+          prevImage();
           break;
         case 'Escape':
-          // Close image viewer
-          if (selectedImage.url) {
-            URL.revokeObjectURL(selectedImage.url);
-          }
-          setSelectedImage(null);
+          closeImageViewer();
           break;
         default:
           break;
@@ -654,200 +484,150 @@ function VideoCatalog() {
     };
     
     window.addEventListener('keydown', handleKeyDown);
-    
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedImage, currentImageIndex]);
-
-
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  }, [isViewingImage, nextImage, prevImage]);
   
-  // Function to truncate file names if they're too long
-  const truncateFileName = (name, maxLength = 28) => {
-    if (!name) return '';
-    if (name.length <= maxLength) return name;
-    
-    const extension = name.lastIndexOf('.') > 0 ? name.slice(name.lastIndexOf('.')) : '';
-    const nameWithoutExt = name.slice(0, name.lastIndexOf('.') > 0 ? name.lastIndexOf('.') : name.length);
-    
-    // Keep the beginning and end of the name, replacing the middle with ...
-    const truncatedName = nameWithoutExt.slice(0, maxLength - 5 - extension.length) + '...' + nameWithoutExt.slice(-2) + extension;
-    return truncatedName;
-  };
-  
-  // Filter items by search term
-  const filteredItems = directoryItems.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Group items by type
-  const directories = filteredItems.filter(item => item.type === 'directory');
-  const allVideos = filteredItems.filter(item => item.type === 'video');
-  const allImages = filteredItems.filter(item => item.type === 'image');
-  
-  // Calculate total pages for videos and images
-  const totalVideoPages = Math.ceil(allVideos.length / itemsPerPage);
-  const totalImagePages = Math.ceil(allImages.length / itemsPerPage);
-  
-  // Get paginated videos and images
-  const startVideoIndex = (currentPage - 1) * itemsPerPage;
-  const startImageIndex = (currentPage - 1) * itemsPerPage;
-  
-  const videos = allVideos.slice(startVideoIndex, startVideoIndex + itemsPerPage);
-  const images = allImages.slice(startImageIndex, startImageIndex + itemsPerPage);
-
-  // Try to restore previously selected directory from localStorage on component mount
+  // Effect to check for stored directory ID on component mount
   useEffect(() => {
-    const restorePreviousSession = async () => {
-      if (!isFileSystemAccessSupported()) return;
-      
+    const restorePreviousDirectory = async () => {
       try {
-        // Check if we have a stored directory ID
         const storedDirId = localStorage.getItem('selectedDirectoryId');
         
-        if (storedDirId) {
-          // Show loading state while trying to restore
+        if (storedDirId && USE_FILE_SYSTEM_ACCESS_API) {
           setIsLoading(true);
           
-          // If the File System Access API exists and supports requestPermission
-          if ('showDirectoryPicker' in window && 'id' in FileSystemHandle.prototype) {
-            // Try to access the directory using the stored ID
+          // Check if we have permission to access the file system
+          if ('showDirectoryPicker' in window) {
             try {
-              // Request permission to use the directory again
-              // This will prompt the user if necessary
-              const dirHandle = await window.showDirectoryPicker({
-                id: storedDirId,
-                mode: 'read',
-                startIn: 'desktop'
-              });
-              
-              setDirectoryHandle(dirHandle);
-              setCurrentDirectory(dirHandle.name);
-              setCurrentPath([dirHandle.name]);
-              
-              // Scan the directory contents
-              await scanDirectory(dirHandle);
-              
-              // Permission granted
-              setHasPermission(true);
+              // For security reasons, we can't directly reopen a directory
+              // The user will need to select it again
+              // This is just a placeholder
+              setError("Your previously selected directory cannot be automatically reopened. Please select a directory again.");
             } catch (err) {
-              // User denied permission or directory no longer exists
-              console.warn('Could not restore directory access:', err);
-              localStorage.removeItem('selectedDirectoryId');
-              setIsLoading(false);
+              console.error('Error restoring directory access:', err);
+              setError(`Error restoring directory access: ${err.message}`);
             }
           } else {
-            setIsLoading(false);
+            setError("This browser doesn't support the File System Access API. Please use the legacy file input method.");
           }
+          
+          setIsLoading(false);
         }
       } catch (err) {
-        console.error('Error restoring session:', err);
+        console.error('Error restoring previous directory:', err);
         setIsLoading(false);
       }
     };
     
-    restorePreviousSession();
+    restorePreviousDirectory();
   }, []);
   
-  // Save directory ID when it changes
-  useEffect(() => {
-    if (directoryHandle && 'id' in FileSystemHandle.prototype) {
-      // Store the directory ID for future sessions
-      localStorage.setItem('selectedDirectoryId', directoryHandle.id);
+  // Function to render image viewer content
+  const renderImageViewer = () => {
+    const [imageUrl, setImageUrl] = useState(null);
+    
+    // Load the image when component mounts
+    useEffect(() => {
+      if (!currentImage) return;
+      
+      const loadImage = async () => {
+        if (currentImage.objectUrl) {
+          setImageUrl(currentImage.objectUrl);
+          return;
+        }
+        
+        try {
+          let url;
+          if (currentImage.isLegacyFile && currentImage.file) {
+            url = URL.createObjectURL(currentImage.file);
+          } else {
+            const file = await currentImage.handle.getFile();
+            url = URL.createObjectURL(file);
+          }
+          
+          currentImage.objectUrl = url;
+          setImageUrl(url);
+        } catch (err) {
+          console.error('Error loading image:', err);
+          setImageUrl(null);
+        }
+      };
+      
+      loadImage();
+    }, [currentImage]);
+    
+    if (!imageUrl) {
+      return <div className="loading-spinner"></div>;
     }
-  }, [directoryHandle]);
+    
+    return (
+      <img 
+        src={imageUrl} 
+        alt={currentImage.name} 
+        className="full-image"
+      />
+    );
+  };
   
-  // Clean up object URLs when component unmounts
-  useEffect(() => {
-    return () => {
-      if (selectedVideo && selectedVideo.url) {
-        URL.revokeObjectURL(selectedVideo.url);
-      }
-    };
-  }, [selectedVideo]);
-
   return (
     <div className="video-catalog">
-      <header className="catalog-header">
-        <h1>Video Catalog</h1>
+      <div className="catalog-header">
+        <h1>
+          {/* Inline SVG icon */}
+          <span dangerouslySetInnerHTML={{ __html: VideoCatalogIcon }} style={{ marginRight: '10px' }} />
+          Video Catalog
+        </h1>
+        
         <div className="catalog-controls">
-          <button onClick={() => window.location.href = '/'} className="back-button">
-            Back to Apps
-          </button>
-          <button onClick={handleSelectDirectory} className="add-button">
-            Select Directory
-          </button>
-          {localStorage.getItem('selectedDirectoryId') && (
-            <button 
-              onClick={() => {
-                localStorage.removeItem('selectedDirectoryId');
-                window.location.reload();
-              }} 
-              className="back-button"
-            >
-              Reset Selection
+          {USE_FILE_SYSTEM_ACCESS_API ? (
+            <button className="primary-button" onClick={selectDirectory}>
+              Select Directory
             </button>
-          )}
-          {videos.length > 0 && (
-            <button 
-              onClick={createCollageFromSelected}
-              disabled={selectedVideosForCollage.length === 0}
-              className="create-collage-button"
-            >
-              Create Collage ({selectedVideosForCollage.length})
-            </button>
+          ) : (
+            <label className="primary-button">
+              Select Directory
+              <input
+                type="file"
+                webkitdirectory="true"
+                directory="true"
+                style={{ display: 'none' }}
+                onChange={selectFilesLegacy}
+              />
+            </label>
           )}
         </div>
-      </header>
+      </div>
 
-      {!directoryHandle && directoryItems.length === 0 ? (
-        <div className="empty-state">
-          <h2>No Files Selected</h2>
-          <p>
-            {isFileSystemAccessSupported() 
-              ? "Select a directory to begin browsing your video and photo collection." 
-              : "Select video and photo files to view in the catalog."}
-          </p>
-          <button onClick={handleSelectDirectory} className="primary-button">
-            {isFileSystemAccessSupported() ? "Select Directory" : "Select Files"}
-          </button>
-          {!isFileSystemAccessSupported() && (
-            <p className="note">
-              Note: Your browser (Safari or other) doesn't support directory browsing. 
-              You can still select multiple files at once instead.
-            </p>
-          )}
-        </div>
-      ) : (
-        <>
+      {directoryHandle || directoryPath.length > 0 ? (
+        <div>
           <div className="directory-navigation">
             <div className="breadcrumb">
-              {currentPath.map((path, index) => (
-                <span 
-                  key={index} 
-                  className="breadcrumb-item"
-                  onClick={() => navigateToBreadcrumb(index)}
-                >
+              {directoryPath.map((dir, index) => (
+                <React.Fragment key={index}>
                   {index > 0 && <span className="separator">/</span>}
-                  {path}
-                </span>
+                  <span 
+                    className="breadcrumb-item"
+                    onClick={() => navigateToPathIndex(index)}
+                  >
+                    {dir.name}
+                  </span>
+                </React.Fragment>
               ))}
             </div>
-            {currentPath.length > 1 && (
-              <button onClick={navigateUp} className="up-button">
-                Go Up
+            
+            {directoryPath.length > 1 && (
+              <button className="up-button" onClick={navigateUp}>
+                Up
               </button>
             )}
           </div>
-
+          
           <div className="search-filter-container">
             <div className="search-bar">
-              <input
-                type="text"
+              <input 
+                type="text" 
                 placeholder="Search files..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -886,196 +666,206 @@ function VideoCatalog() {
                       className="unpin-button"
                       onClick={() => togglePinImage(pinnedImage.id)}
                     >
-                      📌 Unpin
+                      Unpin
                     </button>
                   </div>
                 </div>
               )}
               
-              {/* Main content */}
               <div className={`directory-contents ${pinnedImage ? 'catalog-main-content' : ''}`}>
-              {/* Directories */}
-              {directories.length > 0 && (
-                <div className="content-section">
-                  <h2 className="section-title">Folders</h2>
-                  <div className="folder-grid">
-                    {directories.map(item => (
-                      <div 
-                        key={item.id} 
-                        className="folder-card"
-                        onClick={() => navigateToDirectory(item)}
-                      >
-                        <div className="folder-icon">📁</div>
-                        <div className="folder-name">{item.name}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Videos */}
-              {allVideos.length > 0 && (
-                <div className="content-section">
-                  <h2 className="section-title">Videos ({allVideos.length})</h2>
-                  <div className="video-grid">
-                    {videos.map((video) => (
-                      <SimpleVideoCard 
-                        key={video.id} 
-                        video={video}
-                        isSelected={selectedVideosForCollage.includes(video.id)}
-                        onSelectChange={toggleVideoSelection}
-                        truncateFileName={truncateFileName}
-                      />
-                    ))}
-                  </div>
-                  
-                  {/* Pagination controls for videos */}
-                  {totalVideoPages > 1 && (
-                    <div className="pagination-controls">
-                      <button 
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                        className="pagination-button"
-                        disabled={currentPage === 1}
-                      >
-                        Previous
-                      </button>
-                      
-                      <div className="pagination-info">
-                        Page {currentPage} of {totalVideoPages}
-                      </div>
-                      
-                      <button 
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalVideoPages))}
-                        className="pagination-button"
-                        disabled={currentPage === totalVideoPages}
-                      >
-                        Next
-                      </button>
+                {/* Directories */}
+                {directories.length > 0 && (
+                  <div className="content-section">
+                    <h2 className="section-title">Directories</h2>
+                    <div className="folder-grid">
+                      {directories.map((directory, index) => (
+                        <div 
+                          key={index} 
+                          className="folder-card"
+                          onClick={() => navigateToDirectory(index)}
+                        >
+                          <div className="folder-icon">📁</div>
+                          <div className="folder-name">{directory.name}</div>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* Images */}
-              {allImages.length > 0 && (
-                <div className="content-section">
-                  <h2 className="section-title">Images ({allImages.length})</h2>
-                  <div className="image-grid">
-                    {images.map(image => (
-                      <ImageCard 
-                        key={image.id} 
-                        image={image}
-                        viewImage={viewImage}
-                        truncateFileName={truncateFileName}
-                        isPinned={pinnedImageIds.includes(image.id)}
-                        onTogglePin={togglePinImage}
-                      />
-                    ))}
                   </div>
-                  
-                  {/* Pagination controls for images */}
-                  {totalImagePages > 1 && (
-                    <div className="pagination-controls">
-                      <button 
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                        className="pagination-button"
-                        disabled={currentPage === 1}
-                      >
-                        Previous
-                      </button>
-                      
-                      <div className="pagination-info">
-                        Page {currentPage} of {totalImagePages}
-                      </div>
-                      
-                      <button 
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalImagePages))}
-                        className="pagination-button"
-                        disabled={currentPage === totalImagePages}
-                      >
-                        Next
-                      </button>
+                )}
+                
+                {/* Videos */}
+                {allVideos.length > 0 && (
+                  <div className="content-section">
+                    <h2 className="section-title">Videos ({allVideos.length})</h2>
+                    
+                    <div className="video-grid">
+                      {displayedVideos.map((video, index) => (
+                        <SimpleVideoCard 
+                          key={video.id}
+                          video={video}
+                          onPlay={() => openVideo(allVideos.findIndex(v => v.id === video.id))}
+                        />
+                      ))}
                     </div>
-                  )}
-                </div>
-              )}
-
-              {filteredItems.length === 0 && (
-                <div className="no-results">
-                  <p>No files found in this directory matching your search.</p>
-                </div>
-              )}
+                    
+                    {allVideos.length > itemsPerPage && (
+                      <div className="pagination">
+                        <button 
+                          disabled={currentPage === 1}
+                          onClick={() => handlePageChange(currentPage - 1)}
+                        >
+                          Previous
+                        </button>
+                        <span>
+                          Page {currentPage} of {Math.ceil(allVideos.length / itemsPerPage)}
+                        </span>
+                        <button 
+                          disabled={currentPage >= Math.ceil(allVideos.length / itemsPerPage)}
+                          onClick={() => handlePageChange(currentPage + 1)}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Images */}
+                {allImages.length > 0 && (
+                  <div className="content-section">
+                    <h2 className="section-title">Images ({allImages.length})</h2>
+                    
+                    <div className="image-grid">
+                      {displayedImages.map((image, index) => (
+                        <div 
+                          key={image.id} 
+                          className={`image-card ${pinnedImageIds.includes(image.id) ? 'pinned' : ''}`}
+                          onClick={() => openImage(allImages.findIndex(img => img.id === image.id))}
+                        >
+                          <div className="image-placeholder">
+                            <div className="image-icon">🖼️</div>
+                            <span className="file-type">{image.name.split('.').pop().toUpperCase()}</span>
+                            
+                            {/* Pin button */}
+                            <button 
+                              className={`pin-button ${pinnedImageIds.includes(image.id) ? 'pinned' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                togglePinImage(image.id);
+                              }}
+                            >
+                              📌
+                            </button>
+                          </div>
+                          <div className="image-info">
+                            <p className="image-name">{image.name}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {allImages.length > itemsPerPage && (
+                      <div className="pagination">
+                        <button 
+                          disabled={currentPage === 1}
+                          onClick={() => handlePageChange(currentPage - 1)}
+                        >
+                          Previous
+                        </button>
+                        <span>
+                          Page {currentPage} of {Math.ceil(allImages.length / itemsPerPage)}
+                        </span>
+                        <button 
+                          disabled={currentPage >= Math.ceil(allImages.length / itemsPerPage)}
+                          onClick={() => handlePageChange(currentPage + 1)}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {directories.length === 0 && allVideos.length === 0 && allImages.length === 0 && (
+                  <div className="empty-state">
+                    <h2>No Files Found</h2>
+                    <p>This directory is empty or doesn't contain supported file types.</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
-
-          {/* Video Player removed - using embedded player in cards instead */}
           
-          {/* Image Viewer */}
-          {selectedImage && (
-            <div className="image-viewer-container">
+          {/* Fullscreen video player */}
+          {isFullscreen && currentVideo && (
+            <div className="video-player-container">
+              <div className="video-player-header">
+                <div className="video-header-info">
+                  <h3>{currentVideo.name}</h3>
+                </div>
+                <button className="close-button" onClick={closeVideoPlayer}>
+                  Close
+                </button>
+              </div>
+              
+              <div className="fullscreen-player-wrapper">
+                {currentVideo.isLegacyFile ? (
+                  <video 
+                    src={URL.createObjectURL(currentVideo.file)}
+                    className="native-video-player" 
+                    controls 
+                    autoPlay
+                  />
+                ) : (
+                  <video 
+                    key={currentVideo.id}
+                    className="native-video-player" 
+                    controls 
+                    autoPlay
+                    onLoadStart={async (e) => {
+                      try {
+                        const file = await currentVideo.handle.getFile();
+                        e.target.src = URL.createObjectURL(file);
+                      } catch (err) {
+                        console.error('Error loading video:', err);
+                      }
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* Image viewer */}
+          {isViewingImage && currentImage && (
+            <div className="image-viewer-container" ref={keyboardNavRef}>
               <div className="image-viewer-header">
-                <h3>{selectedImage.name}</h3>
+                <h3>{currentImage.name}</h3>
+                
                 <div className="image-viewer-controls">
                   <button 
-                    className={`pin-button-viewer ${pinnedImageIds.includes(selectedImage.id) ? 'pinned' : ''}`}
-                    onClick={() => togglePinImage(selectedImage.id)}
-                    title={pinnedImageIds.includes(selectedImage.id) ? "Unpin this image" : "Pin this image"}
+                    className={`pin-button-viewer ${pinnedImageIds.includes(currentImage.id) ? 'pinned' : ''}`}
+                    onClick={() => togglePinImage(currentImage.id)}
                   >
-                    {pinnedImageIds.includes(selectedImage.id) ? "📌 Unpin" : "📍 Pin"}
+                    {pinnedImageIds.includes(currentImage.id) ? 'Unpin' : 'Pin'} Image
                   </button>
-                  <button 
-                    className="close-button"
-                    onClick={() => {
-                      URL.revokeObjectURL(selectedImage.url);
-                      setSelectedImage(null);
-                    }}
-                  >
+                  
+                  <button className="close-button" onClick={closeImageViewer}>
                     Close
                   </button>
                 </div>
               </div>
+              
               <div className="image-viewer-content">
-                {pinnedImage ? (
-                  <div className="split-image-viewer">
-                    <div className="pinned-image-container">
-                      <img 
-                        src={pinnedImage.url} 
-                        alt={pinnedImage.name} 
-                        className="pinned-image" 
-                      />
-                      <div className="pinned-image-label">Pinned</div>
-                    </div>
-                    <div className="current-image-container">
-                      <img 
-                        src={selectedImage.url} 
-                        alt={selectedImage.name} 
-                        className="full-image" 
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <img 
-                    src={selectedImage.url} 
-                    alt={selectedImage.name} 
-                    className="full-image"
-                  />
-                )}
+                {/* Viewer content */}
+                {renderImageViewer()}
                 
-                {/* Navigation controls */}
+                {/* Navigation buttons */}
                 <div className="image-viewer-nav">
-                  <button 
-                    className="image-nav-button"
-                    onClick={viewPreviousImage}
-                    title="Previous image (Left arrow key)"
-                  >
-                    &#10094;
+                  <button className="image-nav-button prev-button" onClick={prevImage}>
+                    ‹
                   </button>
-                  <button 
-                    className="image-nav-button"
-                    onClick={viewNextImage}
-                    title="Next image (Right arrow key)"
-                  >
-                    &#10095;
+                  <button className="image-nav-button next-button" onClick={nextImage}>
+                    ›
                   </button>
                 </div>
                 
@@ -1086,7 +876,24 @@ function VideoCatalog() {
               </div>
             </div>
           )}
-        </>
+        </div>
+      ) : (
+        <div className="empty-state">
+          <h2>No Directory Selected</h2>
+          <p>Please select a directory to view its contents.</p>
+          
+          {!USE_FILE_SYSTEM_ACCESS_API && (
+            <p className="warning">
+              Your browser doesn't fully support the File System Access API. 
+              Some features may be limited.
+            </p>
+          )}
+          
+          <p className="note">
+            Note: The Video Catalog can display both videos and images from your local file system.
+            You can browse directories, play videos, and view images.
+          </p>
+        </div>
       )}
     </div>
   );
