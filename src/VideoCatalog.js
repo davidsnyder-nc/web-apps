@@ -742,7 +742,52 @@ function VideoCatalog() {
                           onClick={() => openImage(allImages.findIndex(img => img.id === image.id))}
                         >
                           <div className="image-placeholder">
-                            <div className="image-icon">🖼️</div>
+                            {/* Using a dynamic thumbnail approach for better performance */}
+                            {(() => {
+                              const [thumbnail, setThumbnail] = useState(null);
+                              
+                              useEffect(() => {
+                                // Load thumbnail when component mounts
+                                const loadThumbnail = async () => {
+                                  try {
+                                    let file;
+                                    if (image.isLegacyFile && image.file) {
+                                      file = image.file;
+                                    } else if (image.handle) {
+                                      file = await image.handle.getFile();
+                                    }
+                                    
+                                    if (file) {
+                                      setThumbnail(URL.createObjectURL(file));
+                                    }
+                                  } catch (err) {
+                                    console.error('Error loading thumbnail:', err);
+                                  }
+                                };
+                                
+                                loadThumbnail();
+                                return () => {
+                                  if (thumbnail) {
+                                    URL.revokeObjectURL(thumbnail);
+                                  }
+                                };
+                              }, [image.id]);
+                              
+                              return (
+                                <>
+                                  {thumbnail ? (
+                                    <img 
+                                      src={thumbnail} 
+                                      alt={image.name}
+                                      className="image-thumbnail" 
+                                    />
+                                  ) : (
+                                    <div className="image-icon">🖼️</div>
+                                  )}
+                                </>
+                              );
+                            })()}
+                            
                             <span className="file-type">{image.name.split('.').pop().toUpperCase()}</span>
                             
                             {/* Pin button */}

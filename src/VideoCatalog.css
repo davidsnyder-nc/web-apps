@@ -145,10 +145,12 @@
 .split-catalog-layout {
   display: flex;
   width: 100%;
+  min-height: calc(100vh - 220px);
 }
 
 .pinned-sidebar {
   width: 200px;
+  min-width: 200px;
   height: calc(100vh - 170px);
   position: sticky;
   top: 100px;
@@ -160,6 +162,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .pinned-sidebar-image {
@@ -586,7 +589,7 @@
 
 .image-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 1rem;
 }
 
@@ -596,6 +599,11 @@
   overflow: hidden;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.image-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .image-placeholder {
