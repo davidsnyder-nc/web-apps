@@ -150,15 +150,21 @@ const VideoCard = ({ video, playVideo, createCollage }) => {
   
   // Handle video click
   const handleVideoClick = () => {
-    if (!videoUrl) return;
+    console.log("Video clicked, URL:", videoUrl);
+    if (!videoUrl) {
+      console.log("No video URL available");
+      return;
+    }
     
     if (expanded) {
       // If already expanded, toggle play/pause
       setPlaying(!playing);
+      console.log("Toggling play state to:", !playing);
     } else {
       // If not expanded, expand and play
       setExpanded(true);
       setPlaying(true);
+      console.log("Expanding video player and setting play state to true");
     }
   };
   
@@ -481,6 +487,33 @@ function VideoCatalog() {
       setIsLoading(false);
     }
   };
+  
+  // Navigate to a specific point in the breadcrumb
+  const navigateToBreadcrumb = async (index) => {
+    if (!directoryHandle) return;
+    if (index === currentPath.length - 1) return; // Already at this location
+    
+    setIsLoading(true);
+    try {
+      // Create a new path up to the clicked breadcrumb item
+      const newPath = currentPath.slice(0, index + 1);
+      setCurrentPath(newPath);
+      setCurrentDirectory(newPath[newPath.length - 1]);
+      
+      // Navigate to the selected directory
+      let targetHandle = directoryHandle;
+      // Skip the first item as it's the root directory handle we already have
+      for (let i = 1; i < newPath.length; i++) {
+        targetHandle = await targetHandle.getDirectoryHandle(newPath[i]);
+      }
+      
+      await scanDirectory(targetHandle);
+    } catch (err) {
+      setError(`Error navigating to directory: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Play a video
   const playVideo = async (item) => {
@@ -700,7 +733,11 @@ function VideoCatalog() {
           <div className="directory-navigation">
             <div className="breadcrumb">
               {currentPath.map((path, index) => (
-                <span key={index} className="breadcrumb-item">
+                <span 
+                  key={index} 
+                  className="breadcrumb-item"
+                  onClick={() => navigateToBreadcrumb(index)}
+                >
                   {index > 0 && <span className="separator">/</span>}
                   {path}
                 </span>

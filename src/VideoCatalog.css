@@ -106,11 +106,21 @@
 .breadcrumb-item {
   font-size: 0.95rem;
   color: #455a64;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 3px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.breadcrumb-item:hover {
+  background-color: #e3f2fd;
+  color: #1565c0;
 }
 
 .separator {
   margin: 0 0.5rem;
   color: #90a4ae;
+  cursor: default;
 }
 
 .search-filter-container {
@@ -364,6 +374,16 @@
 
 .video-card.expanded {
   grid-column: 1 / -1;
+  max-height: 650px;
+  margin-bottom: 20px;
+  background-color: #f5f5f5;
+  transform: none !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2) !important;
+}
+
+.video-card.expanded .thumbnail-container {
+  height: 400px;
+  max-height: 70vh;
 }
 
 .react-player-container {
