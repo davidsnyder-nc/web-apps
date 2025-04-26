@@ -70,9 +70,7 @@ const ImageCard = ({ image, viewImage }) => {
 const VideoCard = ({ video, playVideo, createCollage }) => {
   const [thumbnail, setThumbnail] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
   const [videoUrl, setVideoUrl] = useState(null);
-  const [playing, setPlaying] = useState(false);
   
   // Generate thumbnail on mount
   useEffect(() => {
@@ -148,90 +146,42 @@ const VideoCard = ({ video, playVideo, createCollage }) => {
     };
   }, [video]);
   
-  // Handle video click
-  const handleVideoClick = () => {
-    console.log("Video clicked, URL:", videoUrl);
-    if (!videoUrl) {
-      console.log("No video URL available");
-      return;
-    }
-    
-    if (expanded) {
-      // If already expanded, toggle play/pause
-      setPlaying(!playing);
-      console.log("Toggling play state to:", !playing);
+  // Direct play in full screen mode when the card is clicked
+  const handleClick = () => {
+    console.log("Video clicked, opening full screen player");
+    if (videoUrl) {
+      playVideo(video); // Use the parent's playVideo method to open in fullscreen
     } else {
-      // If not expanded, expand and play
-      setExpanded(true);
-      setPlaying(true);
-      console.log("Expanding video player and setting play state to true");
+      console.log("No video URL available");
     }
-  };
-  
-  // Handle fullscreen view
-  const handleFullScreenView = (e) => {
-    e.stopPropagation();
-    playVideo(video);
   };
   
   return (
-    <div className={`video-card ${expanded ? 'expanded' : ''}`}>
+    <div className="video-card">
       <div 
         className="thumbnail-container"
-        onClick={handleVideoClick}
+        onClick={handleClick}
       >
-        {expanded ? (
-          <div className="react-player-container">
-            <ReactPlayer
-              url={videoUrl}
-              width="100%"
-              height="100%"
-              playing={playing}
-              controls={true}
-              light={false}
-              pip={false}
-              onEnded={() => setPlaying(false)}
-              config={{
-                file: {
-                  attributes: {
-                    controlsList: 'nodownload',
-                    disablePictureInPicture: true,
-                  }
-                }
-              }}
-            />
-            <button 
-              className="fullscreen-button" 
-              onClick={handleFullScreenView}
-              title="Open in fullscreen"
-            >
-              <span>⛶</span>
-            </button>
+        {loading || !thumbnail ? (
+          <div className="video-placeholder">
+            <div className="play-icon">▶</div>
           </div>
         ) : (
           <>
-            {loading || !thumbnail ? (
-              <div className="video-placeholder">
-                <div className="play-icon">▶</div>
-              </div>
-            ) : (
-              <>
-                <img 
-                  src={thumbnail} 
-                  alt={video.name} 
-                  className="video-thumbnail" 
-                />
-                <div className="play-button-center">
-                  <div className="play-icon">▶</div>
-                </div>
-              </>
-            )}
-            <div className="thumbnail-overlay">
-              {/* Semi-transparent overlay on hover */}
+            <img 
+              src={thumbnail} 
+              alt={video.name} 
+              className="video-thumbnail" 
+            />
+            <div className="play-button-center">
+              <div className="play-icon">▶</div>
             </div>
-            <span className="file-type">{video.name.split('.').pop().toUpperCase()}</span>
           </>
         )}
+        <div className="thumbnail-overlay">
+          {/* Semi-transparent overlay on hover */}
+        </div>
+        <span className="file-type">{video.name.split('.').pop().toUpperCase()}</span>
       </div>
       <div className="video-info">
         <h3>{video.name}</h3>
@@ -239,15 +189,9 @@ const VideoCard = ({ video, playVideo, createCollage }) => {
           {(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}
         </p>
         <div className="video-actions">
-          {expanded ? (
-            <button onClick={() => setExpanded(false)}>
-              Close Player
-            </button>
-          ) : (
-            <button onClick={handleVideoClick}>
-              Play
-            </button>
-          )}
+          <button onClick={handleClick}>
+            Play
+          </button>
           <button onClick={(e) => { e.stopPropagation(); createCollage(video); }}>
             Create Collage
           </button>
@@ -267,6 +211,8 @@ function VideoCatalog() {
   const [error, setError] = useState(null);
   const videoPlayerRef = useRef(null);
   const [selectedVideo, setSelectedVideo] = useState(null);
+  // Track current video index for autoplay next feature
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(-1);
   const [hasPermission, setHasPermission] = useState(false);
   
   // Define supported file types
@@ -520,11 +466,33 @@ function VideoCatalog() {
     }
   };
 
+  // Find the index of a video in the filtered videos list
+  const findVideoIndex = (videoItem) => {
+    const videosList = filteredItems.filter(item => item.type === 'video');
+    return videosList.findIndex(v => v.id === videoItem.id);
+  };
+  
+  // Play the next video in the list
+  const playNextVideo = () => {
+    if (currentVideoIndex === -1) return;
+    
+    const videosList = filteredItems.filter(item => item.type === 'video');
+    if (videosList.length === 0) return;
+    
+    // Get the next video index, or loop back to the first one
+    const nextIndex = (currentVideoIndex + 1) % videosList.length;
+    playVideo(videosList[nextIndex]);
+  };
+  
   // Play a video
   const playVideo = async (item) => {
     if (item.type !== 'video') return;
     
     try {
+      // Find the index of this video in the filtered videos list
+      const videoIndex = findVideoIndex(item);
+      setCurrentVideoIndex(videoIndex);
+      
       let url;
       
       if (item.isLegacyFile && item.file) {
@@ -540,6 +508,8 @@ function VideoCatalog() {
         ...item,
         url
       });
+      
+      console.log(`Playing video: ${item.name} (index: ${videoIndex})`);
       
       // If we have a video player, load and play the video
       if (videoPlayerRef.current) {
@@ -841,12 +811,24 @@ function VideoCatalog() {
           {selectedVideo && (
             <div className="video-player-container">
               <div className="video-player-header">
-                <h3>{selectedVideo.name}</h3>
+                <div className="video-header-info">
+                  <h3>{selectedVideo.name}</h3>
+                  <div className="video-controls">
+                    <button 
+                      className="nav-button"
+                      onClick={playNextVideo}
+                      title="Play next video"
+                    >
+                      Next Video ⏭
+                    </button>
+                  </div>
+                </div>
                 <button 
                   className="close-button"
                   onClick={() => {
                     URL.revokeObjectURL(selectedVideo.url);
                     setSelectedVideo(null);
+                    setCurrentVideoIndex(-1);
                   }}
                 >
                   Close
@@ -861,6 +843,7 @@ function VideoCatalog() {
                   height="100%"
                   playing={true}
                   controls={true}
+                  onEnded={playNextVideo}
                   config={{
                     file: {
                       attributes: {
