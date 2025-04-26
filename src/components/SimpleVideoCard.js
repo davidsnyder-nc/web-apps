@@ -64,13 +64,21 @@ const SimpleVideoCard = ({
           <p>{(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}</p>
         </div>
         <div className="simple-video-select">
-          <input 
-            type="checkbox" 
-            checked={isSelected} 
-            onChange={handleCheckboxChange}
-            id={`select-video-${video.id}`}
-          />
-          <label htmlFor={`select-video-${video.id}`}>Select for collage</label>
+          <label 
+            htmlFor={`select-video-${video.id}`}
+            className="checkbox-container"
+            title="Select for collage"
+          >
+            <input 
+              type="checkbox" 
+              checked={isSelected} 
+              onChange={handleCheckboxChange}
+              id={`select-video-${video.id}`}
+            />
+            <span className="checkmark">
+              {isSelected ? "✓" : ""}
+            </span>
+          </label>
         </div>
       </div>
       

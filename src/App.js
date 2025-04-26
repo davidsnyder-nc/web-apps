@@ -28,9 +28,33 @@ function App() {
   useEffect(() => {
     const collageVideosFromCatalog = localStorage.getItem('collageVideos');
     if (collageVideosFromCatalog) {
-      // In a real app, we would fetch the videos using the IDs
-      // For now, we'll just display a message
-      setError('Videos from catalog selected. In a full implementation, these would be loaded automatically.');
+      try {
+        // Parse the videos from localStorage
+        const catalogVideos = JSON.parse(collageVideosFromCatalog);
+        
+        if (Array.isArray(catalogVideos) && catalogVideos.length > 0) {
+          // Process the videos from the catalog
+          const processedVideos = catalogVideos.map(video => ({
+            id: video.id || Math.random().toString(36).substr(2, 9),
+            name: video.name || 'Video from catalog',
+            url: video.url
+          }));
+          
+          // Add the videos to the collage
+          setVideos(prevVideos => [...prevVideos, ...processedVideos]);
+          
+          // Set default audio config (first video has audio)
+          if (audioConfig.activeVideoIds.length === 0 && processedVideos.length > 0) {
+            setAudioConfig(prevConfig => ({ 
+              ...prevConfig, 
+              activeVideoIds: [processedVideos[0].id] 
+            }));
+          }
+        }
+      } catch (err) {
+        console.error('Error processing catalog videos:', err);
+        setError(`Error loading videos from catalog: ${err.message}`);
+      }
       
       // Clear localStorage to prevent re-loading on refresh
       localStorage.removeItem('collageVideos');

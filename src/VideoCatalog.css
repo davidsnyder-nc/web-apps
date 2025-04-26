@@ -228,17 +228,24 @@
 
 .simple-video-title {
   flex: 1;
+  padding-right: 10px;
 }
 
 .simple-video-title h3 {
   margin: 0 0 5px 0;
   font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .simple-video-title p {
   margin: 0;
   color: #666;
-  font-size: 14px;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .simple-video-select {
@@ -247,15 +254,50 @@
   margin-left: 10px;
 }
 
-.simple-video-select input[type="checkbox"] {
-  margin-right: 5px;
+/* Hide the default checkbox */
+.checkbox-container {
+  display: block;
+  position: relative;
+  padding-left: 25px;
   cursor: pointer;
+  user-select: none;
 }
 
-.simple-video-select label {
-  font-size: 14px;
-  color: #666;
+.checkbox-container input {
+  position: absolute;
+  opacity: 0;
   cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+/* Create custom checkbox */
+.checkmark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 20px;
+  width: 20px;
+  background-color: #f1f1f1;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+/* On hover */
+.checkbox-container:hover .checkmark {
+  background-color: #e0e0e0;
+}
+
+/* When checked */
+.checkbox-container input:checked ~ .checkmark {
+  background-color: #4a90e2;
+  border-color: #4a90e2;
 }
 
 .simple-video-player-container {
