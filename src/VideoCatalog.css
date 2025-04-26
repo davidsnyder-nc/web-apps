@@ -530,6 +530,40 @@
   align-items: center;
   justify-content: center;
   background-color: #eceff1;
+  position: relative;
+  overflow: hidden;
+}
+
+.pin-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  opacity: 0.7;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.pin-button:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.pin-button.pinned {
+  background-color: rgba(255, 223, 0, 0.3);
+  opacity: 1;
+}
+
+.image-card.pinned {
+  box-shadow: 0 0 0 2px #ffd700;
 }
 
 .image-icon {
@@ -640,6 +674,38 @@
   justify-content: center;
   overflow: hidden;
   position: relative;
+}
+
+.split-image-viewer {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.pinned-image-container {
+  width: 30%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 10px;
+  box-sizing: border-box;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pinned-image {
+  max-width: 100%;
+  max-height: 90%;
+  object-fit: contain;
+}
+
+.current-image-container {
+  width: 70%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .full-image {

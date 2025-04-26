@@ -4,9 +4,12 @@ import './VideoCatalog.css';
 import SimpleVideoCard from './components/SimpleVideoCard';
 
 // Image Card Component with Thumbnail Generation
-const ImageCard = ({ image, viewImage }) => {
+const ImageCard = ({ image, viewImage, truncateFileName, isPinned, onTogglePin }) => {
   const [thumbnail, setThumbnail] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // Truncate file name if it's too long
+  const displayName = truncateFileName ? truncateFileName(image.name) : image.name;
   
   useEffect(() => {
     const generateThumbnail = async () => {
@@ -41,9 +44,17 @@ const ImageCard = ({ image, viewImage }) => {
     };
   }, [image]);
   
+  // Handle pin toggle with event stopPropagation
+  const handlePinToggle = (e) => {
+    e.stopPropagation();
+    if (onTogglePin) {
+      onTogglePin(image.id);
+    }
+  };
+  
   return (
     <div 
-      className="image-card"
+      className={`image-card ${isPinned ? 'pinned' : ''}`}
       onClick={() => viewImage(image)}
     >
       <div className="image-placeholder">
@@ -56,9 +67,18 @@ const ImageCard = ({ image, viewImage }) => {
             className="image-thumbnail" 
           />
         )}
+        {!loading && (
+          <button 
+            className={`pin-button ${isPinned ? 'pinned' : ''}`}
+            onClick={handlePinToggle}
+            title={isPinned ? 'Unpin image' : 'Pin image'}
+          >
+            {isPinned ? '📌' : '📍'}
+          </button>
+        )}
       </div>
       <div className="image-info">
-        <p className="image-name">{image.name}</p>
+        <p className="image-name" title={image.name}>{displayName}</p>
         <p className="file-details">
           {(image.size / (1024 * 1024)).toFixed(2)} MB
         </p>
@@ -460,6 +480,9 @@ function VideoCatalog() {
   // State for selected image viewer
   const [selectedImage, setSelectedImage] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  // State for pinned image
+  const [pinnedImage, setPinnedImage] = useState(null);
+  const [pinnedImageIds, setPinnedImageIds] = useState([]);
   
   // View an image in the modal viewer
   const viewImage = async (item) => {
