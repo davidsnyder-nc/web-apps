@@ -780,6 +780,46 @@
   max-width: 80%;
 }
 
+.image-viewer-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.pin-button-viewer {
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pin-button-viewer:hover {
+  background-color: #1976D2;
+}
+
+.pin-button-viewer.pinned {
+  background-color: #FFC107;
+  color: #333;
+}
+
+.pinned-image-label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background-color: rgba(255, 193, 7, 0.7);
+  color: #333;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
 .video-header-info {
   display: flex;
   flex-direction: column;

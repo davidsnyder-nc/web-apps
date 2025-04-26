@@ -578,6 +578,57 @@ function VideoCatalog() {
     }
   };
   
+  // Toggle image pin state
+  const togglePinImage = async (imageId) => {
+    // Check if we already have this image pinned
+    if (pinnedImageIds.includes(imageId)) {
+      // Unpin the image
+      setPinnedImageIds(prevIds => prevIds.filter(id => id !== imageId));
+      
+      // If this is the currently pinned image, remove it
+      if (pinnedImage && pinnedImage.id === imageId) {
+        // Clean up URL object
+        if (pinnedImage.url) {
+          URL.revokeObjectURL(pinnedImage.url);
+        }
+        setPinnedImage(null);
+      }
+    } else {
+      // Pin the image - find it in all images
+      const imageToPinIndex = allImages.findIndex(img => img.id === imageId);
+      if (imageToPinIndex === -1) return;
+      
+      const imageToPin = allImages[imageToPinIndex];
+      
+      // Load the image file for pinned display
+      try {
+        let url;
+        if (imageToPin.isLegacyFile && imageToPin.file) {
+          url = URL.createObjectURL(imageToPin.file);
+        } else {
+          const file = await imageToPin.handle.getFile();
+          url = URL.createObjectURL(file);
+        }
+        
+        // Add to pinned image IDs
+        setPinnedImageIds(prevIds => [...prevIds, imageId]);
+        
+        // If we already have a pinned image, clean it up
+        if (pinnedImage && pinnedImage.url) {
+          URL.revokeObjectURL(pinnedImage.url);
+        }
+        
+        // Set as pinned image
+        setPinnedImage({
+          ...imageToPin,
+          url
+        });
+      } catch (err) {
+        setError(`Error pinning image: ${err.message}`);
+      }
+    }
+  };
+  
   // Handle keyboard navigation in image viewer
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -850,6 +901,7 @@ function VideoCatalog() {
                         video={video}
                         isSelected={selectedVideosForCollage.includes(video.id)}
                         onSelectChange={toggleVideoSelection}
+                        truncateFileName={truncateFileName}
                       />
                     ))}
                   </div>
@@ -891,6 +943,9 @@ function VideoCatalog() {
                         key={image.id} 
                         image={image}
                         viewImage={viewImage}
+                        truncateFileName={truncateFileName}
+                        isPinned={pinnedImageIds.includes(image.id)}
+                        onTogglePin={togglePinImage}
                       />
                     ))}
                   </div>
@@ -937,7 +992,14 @@ function VideoCatalog() {
             <div className="image-viewer-container">
               <div className="image-viewer-header">
                 <h3>{selectedImage.name}</h3>
-                <div>
+                <div className="image-viewer-controls">
+                  <button 
+                    className={`pin-button-viewer ${pinnedImageIds.includes(selectedImage.id) ? 'pinned' : ''}`}
+                    onClick={() => togglePinImage(selectedImage.id)}
+                    title={pinnedImageIds.includes(selectedImage.id) ? "Unpin this image" : "Pin this image"}
+                  >
+                    {pinnedImageIds.includes(selectedImage.id) ? "📌 Unpin" : "📍 Pin"}
+                  </button>
                   <button 
                     className="close-button"
                     onClick={() => {
@@ -950,11 +1012,31 @@ function VideoCatalog() {
                 </div>
               </div>
               <div className="image-viewer-content">
-                <img 
-                  src={selectedImage.url} 
-                  alt={selectedImage.name} 
-                  className="full-image"
-                />
+                {pinnedImage ? (
+                  <div className="split-image-viewer">
+                    <div className="pinned-image-container">
+                      <img 
+                        src={pinnedImage.url} 
+                        alt={pinnedImage.name} 
+                        className="pinned-image" 
+                      />
+                      <div className="pinned-image-label">Pinned</div>
+                    </div>
+                    <div className="current-image-container">
+                      <img 
+                        src={selectedImage.url} 
+                        alt={selectedImage.name} 
+                        className="full-image" 
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <img 
+                    src={selectedImage.url} 
+                    alt={selectedImage.name} 
+                    className="full-image"
+                  />
+                )}
                 
                 {/* Navigation controls */}
                 <div className="image-viewer-nav">
