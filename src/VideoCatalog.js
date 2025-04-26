@@ -1,6 +1,122 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './VideoCatalog.css';
 
+// Video Card Component with Thumbnail Generation
+const VideoCard = ({ video, playVideo, createCollage }) => {
+  const [thumbnail, setThumbnail] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const generateThumbnail = async () => {
+      try {
+        let videoFile;
+        
+        if (video.isLegacyFile && video.file) {
+          // Safari fallback
+          videoFile = video.file;
+        } else {
+          // File System Access API
+          videoFile = await video.handle.getFile();
+        }
+        
+        // Create a URL for the video file
+        const videoUrl = URL.createObjectURL(videoFile);
+        
+        // Create a video element to extract the frame
+        const videoEl = document.createElement('video');
+        videoEl.src = videoUrl;
+        videoEl.crossOrigin = "anonymous";
+        videoEl.muted = true;
+        videoEl.preload = "metadata";
+        
+        // When video metadata is loaded, seek to a specific time
+        videoEl.onloadedmetadata = () => {
+          // Seek to 1 second or 10% of the video, whichever is less
+          const seekTime = Math.min(1, videoEl.duration * 0.1);
+          videoEl.currentTime = seekTime;
+        };
+        
+        // When seeking completes, capture the frame
+        videoEl.onseeked = () => {
+          // Create a canvas to draw the video frame
+          const canvas = document.createElement('canvas');
+          canvas.width = videoEl.videoWidth;
+          canvas.height = videoEl.videoHeight;
+          
+          // Draw the video frame on the canvas
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+          
+          // Convert the canvas to a data URL
+          const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setThumbnail(thumbnailUrl);
+          setLoading(false);
+          
+          // Clean up
+          URL.revokeObjectURL(videoUrl);
+        };
+        
+        // Handle errors
+        videoEl.onerror = () => {
+          setLoading(false);
+          URL.revokeObjectURL(videoUrl);
+        };
+      } catch (err) {
+        console.error('Error generating thumbnail:', err);
+        setLoading(false);
+      }
+    };
+    
+    generateThumbnail();
+    
+    // Clean up
+    return () => {
+      if (thumbnail) {
+        // If thumbnail is a blob URL, revoke it
+        if (thumbnail.startsWith('blob:')) {
+          URL.revokeObjectURL(thumbnail);
+        }
+      }
+    };
+  }, [video]);
+  
+  return (
+    <div className="video-card">
+      <div 
+        className="thumbnail-container"
+        onClick={() => playVideo(video)}
+      >
+        {loading || !thumbnail ? (
+          <div className="video-placeholder">
+            <div className="play-icon">▶</div>
+          </div>
+        ) : (
+          <img 
+            src={thumbnail} 
+            alt={video.name} 
+            className="video-thumbnail" 
+          />
+        )}
+        <span className="file-type">{video.name.split('.').pop().toUpperCase()}</span>
+      </div>
+      <div className="video-info">
+        <h3>{video.name}</h3>
+        <p className="file-details">
+          {(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}
+        </p>
+        <div className="video-actions">
+          <button onClick={() => playVideo(video)}>
+            Play
+          </button>
+          <button onClick={() => createCollage(video)}>
+            Create Collage
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function VideoCatalog() {
   const [currentDirectory, setCurrentDirectory] = useState(null);
   const [directoryHandle, setDirectoryHandle] = useState(null);
@@ -431,31 +547,7 @@ function VideoCatalog() {
                   <h2 className="section-title">Videos</h2>
                   <div className="video-grid">
                     {videos.map(video => (
-                      <div key={video.id} className="video-card">
-                        <div 
-                          className="thumbnail-container"
-                          onClick={() => playVideo(video)}
-                        >
-                          <div className="video-placeholder">
-                            <div className="play-icon">▶</div>
-                          </div>
-                          <span className="file-type">{video.name.split('.').pop().toUpperCase()}</span>
-                        </div>
-                        <div className="video-info">
-                          <h3>{video.name}</h3>
-                          <p className="file-details">
-                            {(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}
-                          </p>
-                          <div className="video-actions">
-                            <button onClick={() => playVideo(video)}>
-                              Play
-                            </button>
-                            <button onClick={() => createCollage(video)}>
-                              Create Collage
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                      <VideoCard key={video.id} video={video} playVideo={playVideo} createCollage={createCollage} />
                     ))}
                   </div>
                 </div>
