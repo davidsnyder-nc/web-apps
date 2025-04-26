@@ -127,6 +127,7 @@ function VideoCatalog() {
   const [error, setError] = useState(null);
   const videoPlayerRef = useRef(null);
   const [selectedVideo, setSelectedVideo] = useState(null);
+  const [hasPermission, setHasPermission] = useState(false);
   
   // Define supported file types
   const supportedVideoTypes = [
@@ -216,9 +217,15 @@ function VideoCatalog() {
         setDirectoryHandle(dirHandle);
         setCurrentDirectory(dirHandle.name);
         setCurrentPath([dirHandle.name]);
+        setHasPermission(true);
         
         // Scan the directory
         await scanDirectory(dirHandle);
+        
+        // Store directory ID if available
+        if ('id' in FileSystemHandle.prototype) {
+          localStorage.setItem('selectedDirectoryId', dirHandle.id);
+        }
       } catch (err) {
         // User cancelled or error occurred
         if (err.name !== 'AbortError') {
@@ -440,6 +447,67 @@ function VideoCatalog() {
   const videos = filteredItems.filter(item => item.type === 'video');
   const images = filteredItems.filter(item => item.type === 'image');
 
+  // Try to restore previously selected directory from localStorage on component mount
+  useEffect(() => {
+    const restorePreviousSession = async () => {
+      if (!isFileSystemAccessSupported()) return;
+      
+      try {
+        // Check if we have a stored directory ID
+        const storedDirId = localStorage.getItem('selectedDirectoryId');
+        
+        if (storedDirId) {
+          // Show loading state while trying to restore
+          setIsLoading(true);
+          
+          // If the File System Access API exists and supports requestPermission
+          if ('showDirectoryPicker' in window && 'id' in FileSystemHandle.prototype) {
+            // Try to access the directory using the stored ID
+            try {
+              // Request permission to use the directory again
+              // This will prompt the user if necessary
+              const dirHandle = await window.showDirectoryPicker({
+                id: storedDirId,
+                mode: 'read',
+                startIn: 'desktop'
+              });
+              
+              setDirectoryHandle(dirHandle);
+              setCurrentDirectory(dirHandle.name);
+              setCurrentPath([dirHandle.name]);
+              
+              // Scan the directory contents
+              await scanDirectory(dirHandle);
+              
+              // Permission granted
+              setHasPermission(true);
+            } catch (err) {
+              // User denied permission or directory no longer exists
+              console.warn('Could not restore directory access:', err);
+              localStorage.removeItem('selectedDirectoryId');
+              setIsLoading(false);
+            }
+          } else {
+            setIsLoading(false);
+          }
+        }
+      } catch (err) {
+        console.error('Error restoring session:', err);
+        setIsLoading(false);
+      }
+    };
+    
+    restorePreviousSession();
+  }, []);
+  
+  // Save directory ID when it changes
+  useEffect(() => {
+    if (directoryHandle && 'id' in FileSystemHandle.prototype) {
+      // Store the directory ID for future sessions
+      localStorage.setItem('selectedDirectoryId', directoryHandle.id);
+    }
+  }, [directoryHandle]);
+  
   // Clean up object URLs when component unmounts
   useEffect(() => {
     return () => {
@@ -460,6 +528,17 @@ function VideoCatalog() {
           <button onClick={handleSelectDirectory} className="add-button">
             Select Directory
           </button>
+          {localStorage.getItem('selectedDirectoryId') && (
+            <button 
+              onClick={() => {
+                localStorage.removeItem('selectedDirectoryId');
+                window.location.reload();
+              }} 
+              className="back-button"
+            >
+              Reset Selection
+            </button>
+          )}
         </div>
       </header>
 
@@ -513,7 +592,11 @@ function VideoCatalog() {
           {isLoading ? (
             <div className="loading-container">
               <div className="loading-spinner"></div>
-              <p>Loading directory contents...</p>
+              <p>
+                {localStorage.getItem('selectedDirectoryId') && !directoryHandle ? 
+                 "Attempting to restore your previous directory selection..." :
+                 "Loading directory contents..."}
+              </p>
             </div>
           ) : error ? (
             <div className="error-message">
