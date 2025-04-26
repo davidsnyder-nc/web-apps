@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactPlayer from 'react-player';
 import './VideoCatalog.css';
+import SimpleVideoCard from './components/SimpleVideoCard';
 
 // Image Card Component with Thumbnail Generation
 const ImageCard = ({ image, viewImage }) => {
@@ -660,7 +661,7 @@ function VideoCatalog() {
                   <h2 className="section-title">Videos</h2>
                   <div className="video-grid">
                     {videos.map((video) => (
-                      <VideoCard 
+                      <SimpleVideoCard 
                         key={video.id} 
                         video={video}
                         createCollage={createCollage} 
