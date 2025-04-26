@@ -66,71 +66,69 @@ const ImageCard = ({ image, viewImage }) => {
   );
 };
 
-// Extremely basic Video Card component
+// Ultra-basic Video Card Component
 const VideoCard = ({ video, createCollage }) => {
-  const videoRef = useRef(null);
-  const [videoSrc, setVideoSrc] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   
-  // Load the video on mount
-  useEffect(() => {
-    async function loadVideo() {
-      try {
-        // Get the file
-        let file;
-        if (video.isLegacyFile && video.file) {
-          file = video.file;
-        } else {
-          file = await video.handle.getFile();
-        }
-        
-        // Create object URL
-        const url = URL.createObjectURL(file);
-        setVideoSrc(url);
-        
-        // Cleanup
-        return () => {
-          URL.revokeObjectURL(url);
-        };
-      } catch (error) {
-        console.error("Failed to load video:", error);
-      }
-    }
-    
-    loadVideo();
-  }, [video]);
-  
-  // Simple play toggle
-  const togglePlay = () => {
-    if (videoRef.current) {
-      if (videoRef.current.paused) {
-        videoRef.current.play();
+  // Function to load the video file when needed
+  const handleLoadVideo = async () => {
+    try {
+      if (videoUrl) return; // Already loaded
+      
+      // Get the file
+      let file;
+      if (video.isLegacyFile && video.file) {
+        file = video.file;
       } else {
-        videoRef.current.pause();
+        file = await video.handle.getFile();
       }
+      
+      // Create object URL
+      const url = URL.createObjectURL(file);
+      setVideoUrl(url);
+    } catch (error) {
+      console.error("Failed to load video:", error);
     }
   };
   
+  // Load video on mount
+  useEffect(() => {
+    handleLoadVideo();
+    
+    // Cleanup when component unmounts
+    return () => {
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl);
+      }
+    };
+  }, []);
+  
   return (
     <div className="video-card">
-      <div className="thumbnail-container">
-        <video 
-          ref={videoRef} 
-          src={videoSrc}
-          onClick={togglePlay}
-          controls
-          preload="metadata"
-          style={{width: '100%', height: '100%', objectFit: 'contain'}}
-        />
-      </div>
       <div className="video-info">
         <h3>{video.name}</h3>
         <p className="file-details">
           {(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}
         </p>
+        
+        {/* Main video container */}
+        <div style={{marginTop: '10px', marginBottom: '10px'}}>
+          {videoUrl ? (
+            <video 
+              src={videoUrl}
+              controls
+              width="100%"
+              height="auto"
+            />
+          ) : (
+            <div className="video-placeholder" onClick={handleLoadVideo}>
+              <div className="play-icon">▶</div>
+              <div>Click to load video</div>
+            </div>
+          )}
+        </div>
+        
         <div className="video-actions">
-          <button onClick={togglePlay}>
-            Play/Pause
-          </button>
           <button onClick={() => createCollage(video)}>
             Create Collage
           </button>

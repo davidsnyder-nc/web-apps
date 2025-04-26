@@ -219,9 +219,17 @@
 .thumbnail-container {
   position: relative;
   aspect-ratio: 16 / 9;
-  overflow: hidden;
-  cursor: pointer;
   background-color: #263238;
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
+}
+
+/* Style for video element inside thumbnail container */
+.thumbnail-container video {
+  width: 100%;
+  height: 100%;
+  background-color: #000;
+  display: block;
 }
 
 .video-placeholder {
@@ -258,6 +266,7 @@
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none; /* Let clicks pass through to the container */
+  z-index: -1; /* Move behind the video player */
 }
 
 .thumbnail-container:hover .thumbnail-overlay {
