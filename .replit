@@ -5,7 +5,7 @@ channel = "stable-24_05"
 packages = ["glib", "nss", "dbus", "atk", "cups", "gtk3", "mesa"]
 
 [workflows]
-runButton = "Video Collage Web App Dev"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"

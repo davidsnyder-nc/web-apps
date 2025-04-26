@@ -24,6 +24,19 @@ function App() {
     input.click();
   };
   
+  // Check if we have videos from the Video Catalog app
+  useEffect(() => {
+    const collageVideosFromCatalog = localStorage.getItem('collageVideos');
+    if (collageVideosFromCatalog) {
+      // In a real app, we would fetch the videos using the IDs
+      // For now, we'll just display a message
+      setError('Videos from catalog selected. In a full implementation, these would be loaded automatically.');
+      
+      // Clear localStorage to prevent re-loading on refresh
+      localStorage.removeItem('collageVideos');
+    }
+  }, []);
+  
   // Process video files
   const processVideoFiles = async (files) => {
     if (files.length === 0) return;
