@@ -507,33 +507,11 @@ function VideoCatalog() {
     }
   };
 
-  // Find the index of a video in the filtered videos list
-  const findVideoIndex = (videoItem) => {
-    const videosList = filteredItems.filter(item => item.type === 'video');
-    return videosList.findIndex(v => v.id === videoItem.id);
-  };
-  
-  // Play the next video in the list
-  const playNextVideo = () => {
-    if (currentVideoIndex === -1) return;
-    
-    const videosList = filteredItems.filter(item => item.type === 'video');
-    if (videosList.length === 0) return;
-    
-    // Get the next video index, or loop back to the first one
-    const nextIndex = (currentVideoIndex + 1) % videosList.length;
-    playVideo(videosList[nextIndex]);
-  };
-  
-  // Play a video
-  const playVideo = async (item) => {
+  // Create a video collage from selected videos - we're keeping this function
+  const createCollage = async (item) => {
     if (item.type !== 'video') return;
     
     try {
-      // Find the index of this video in the filtered videos list
-      const videoIndex = findVideoIndex(item);
-      setCurrentVideoIndex(videoIndex);
-      
       let url;
       
       if (item.isLegacyFile && item.file) {
@@ -545,21 +523,16 @@ function VideoCatalog() {
         url = URL.createObjectURL(file);
       }
       
-      setSelectedVideo({
-        ...item,
+      // Store the video URL in localStorage
+      localStorage.setItem('collageVideos', JSON.stringify([{
+        id: item.id,
         url
-      });
+      }]));
       
-      console.log(`Playing video: ${item.name} (index: ${videoIndex})`);
-      
-      // If we have a video player, load and play the video
-      if (videoPlayerRef.current) {
-        videoPlayerRef.current.src = url;
-        videoPlayerRef.current.load();
-        // Don't autoplay - let user control playback
-      }
+      // Redirect to video collage app
+      window.location.href = '/video-collage';
     } catch (err) {
-      setError(`Error playing video: ${err.message}`);
+      setError(`Error creating collage: ${err.message}`);
     }
   };
 
@@ -592,34 +565,7 @@ function VideoCatalog() {
     }
   };
 
-  // Create a video collage from selected videos
-  const createCollage = async (item) => {
-    if (item.type !== 'video') return;
-    
-    try {
-      let url;
-      
-      if (item.isLegacyFile && item.file) {
-        // Safari fallback: use the file directly
-        url = URL.createObjectURL(item.file);
-      } else {
-        // File System Access API
-        const file = await item.handle.getFile();
-        url = URL.createObjectURL(file);
-      }
-      
-      // Store the video URL in localStorage
-      localStorage.setItem('collageVideos', JSON.stringify([{
-        id: item.id,
-        url
-      }]));
-      
-      // Redirect to video collage app
-      window.location.href = '/video-collage';
-    } catch (err) {
-      setError(`Error creating collage: ${err.message}`);
-    }
-  };
+
 
   // Filter items by search term
   const filteredItems = directoryItems.filter(item => 
@@ -856,56 +802,7 @@ function VideoCatalog() {
             </div>
           )}
 
-          {/* Video Player */}
-          {selectedVideo && (
-            <div className="video-player-container">
-              <div className="video-player-header">
-                <div className="video-header-info">
-                  <h3>{selectedVideo.name}</h3>
-                  <div className="video-controls">
-                    <button 
-                      className="nav-button"
-                      onClick={playNextVideo}
-                      title="Play next video"
-                    >
-                      Next Video ⏭
-                    </button>
-                  </div>
-                </div>
-                <button 
-                  className="close-button"
-                  onClick={() => {
-                    if (videoPlayerRef.current) {
-                      videoPlayerRef.current.pause();
-                    }
-                    URL.revokeObjectURL(selectedVideo.url);
-                    setSelectedVideo(null);
-                    setCurrentVideoIndex(-1);
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-              <div className="fullscreen-player-wrapper">
-                <ReactPlayer
-                  url={selectedVideo.url}
-                  className="react-player"
-                  width="100%"
-                  height="100%"
-                  playing={true}
-                  controls={true}
-                  onEnded={playNextVideo}
-                  config={{
-                    file: {
-                      attributes: {
-                        controlsList: 'nodownload',
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          )}
+          {/* Video Player removed - using embedded player in cards instead */}
           
           {/* Image Viewer */}
           {selectedImage && (
