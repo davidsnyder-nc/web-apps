@@ -870,7 +870,30 @@ function VideoCatalog() {
               <button onClick={() => setError(null)}>Dismiss</button>
             </div>
           ) : (
-            <div className="directory-contents">
+            <div className="split-catalog-layout">
+              {/* Pinned image sidebar */}
+              {pinnedImage && (
+                <div className="pinned-sidebar">
+                  <div className="pinned-sidebar-label">Pinned Image</div>
+                  <div className="pinned-sidebar-image">
+                    <img 
+                      src={pinnedImage.url} 
+                      alt={pinnedImage.name}
+                    />
+                  </div>
+                  <div className="pinned-sidebar-controls">
+                    <button 
+                      className="unpin-button"
+                      onClick={() => togglePinImage(pinnedImage.id)}
+                    >
+                      📌 Unpin
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Main content */}
+              <div className={`directory-contents ${pinnedImage ? 'catalog-main-content' : ''}`}>
               {/* Directories */}
               {directories.length > 0 && (
                 <div className="content-section">
