@@ -1,11 +1,80 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactPlayer from 'react-player';
 import './VideoCatalog.css';
 
-// Video Card Component with Thumbnail Generation
-const VideoCard = ({ video, playVideo, createCollage }) => {
+// Image Card Component with Thumbnail Generation
+const ImageCard = ({ image, viewImage }) => {
   const [thumbnail, setThumbnail] = useState(null);
   const [loading, setLoading] = useState(true);
   
+  useEffect(() => {
+    const generateThumbnail = async () => {
+      try {
+        let imageFile;
+        
+        if (image.isLegacyFile && image.file) {
+          // Safari fallback
+          imageFile = image.file;
+        } else {
+          // File System Access API
+          imageFile = await image.handle.getFile();
+        }
+        
+        // Create a URL for the image file
+        const url = URL.createObjectURL(imageFile);
+        setThumbnail(url);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error generating image thumbnail:', err);
+        setLoading(false);
+      }
+    };
+    
+    generateThumbnail();
+    
+    // Clean up
+    return () => {
+      if (thumbnail) {
+        URL.revokeObjectURL(thumbnail);
+      }
+    };
+  }, [image]);
+  
+  return (
+    <div 
+      className="image-card"
+      onClick={() => viewImage(image)}
+    >
+      <div className="image-placeholder">
+        {loading ? (
+          <div className="image-icon">🖼️</div>
+        ) : (
+          <img 
+            src={thumbnail} 
+            alt={image.name} 
+            className="image-thumbnail" 
+          />
+        )}
+      </div>
+      <div className="image-info">
+        <p className="image-name">{image.name}</p>
+        <p className="file-details">
+          {(image.size / (1024 * 1024)).toFixed(2)} MB
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// Video Card Component with Thumbnail Generation and Inline Playback
+const VideoCard = ({ video, playVideo, createCollage }) => {
+  const [thumbnail, setThumbnail] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+  const [videoUrl, setVideoUrl] = useState(null);
+  const [playing, setPlaying] = useState(false);
+  
+  // Generate thumbnail on mount
   useEffect(() => {
     const generateThumbnail = async () => {
       try {
@@ -20,11 +89,12 @@ const VideoCard = ({ video, playVideo, createCollage }) => {
         }
         
         // Create a URL for the video file
-        const videoUrl = URL.createObjectURL(videoFile);
+        const url = URL.createObjectURL(videoFile);
+        setVideoUrl(url);
         
         // Create a video element to extract the frame
         const videoEl = document.createElement('video');
-        videoEl.src = videoUrl;
+        videoEl.src = url;
         videoEl.crossOrigin = "anonymous";
         videoEl.muted = true;
         videoEl.preload = "metadata";
@@ -51,15 +121,13 @@ const VideoCard = ({ video, playVideo, createCollage }) => {
           const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.7);
           setThumbnail(thumbnailUrl);
           setLoading(false);
-          
-          // Clean up
-          URL.revokeObjectURL(videoUrl);
         };
         
         // Handle errors
         videoEl.onerror = () => {
           setLoading(false);
-          URL.revokeObjectURL(videoUrl);
+          URL.revokeObjectURL(url);
+          setVideoUrl(null);
         };
       } catch (err) {
         console.error('Error generating thumbnail:', err);
@@ -71,33 +139,88 @@ const VideoCard = ({ video, playVideo, createCollage }) => {
     
     // Clean up
     return () => {
-      if (thumbnail) {
-        // If thumbnail is a blob URL, revoke it
-        if (thumbnail.startsWith('blob:')) {
-          URL.revokeObjectURL(thumbnail);
-        }
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl);
+      }
+      if (thumbnail && thumbnail.startsWith('blob:')) {
+        URL.revokeObjectURL(thumbnail);
       }
     };
   }, [video]);
   
+  // Handle video click
+  const handleVideoClick = () => {
+    if (!videoUrl) return;
+    
+    if (expanded) {
+      // If already expanded, toggle play/pause
+      setPlaying(!playing);
+    } else {
+      // If not expanded, expand and play
+      setExpanded(true);
+      setPlaying(true);
+    }
+  };
+  
+  // Handle fullscreen view
+  const handleFullScreenView = (e) => {
+    e.stopPropagation();
+    playVideo(video);
+  };
+  
   return (
-    <div className="video-card">
+    <div className={`video-card ${expanded ? 'expanded' : ''}`}>
       <div 
         className="thumbnail-container"
-        onClick={() => playVideo(video)}
+        onClick={handleVideoClick}
       >
-        {loading || !thumbnail ? (
-          <div className="video-placeholder">
-            <div className="play-icon">▶</div>
+        {expanded ? (
+          <div className="react-player-container">
+            <ReactPlayer
+              url={videoUrl}
+              width="100%"
+              height="100%"
+              playing={playing}
+              controls={true}
+              light={false}
+              pip={false}
+              onEnded={() => setPlaying(false)}
+              config={{
+                file: {
+                  attributes: {
+                    controlsList: 'nodownload',
+                    disablePictureInPicture: true,
+                  }
+                }
+              }}
+            />
+            <button 
+              className="fullscreen-button" 
+              onClick={handleFullScreenView}
+              title="Open in fullscreen"
+            >
+              <span>⛶</span>
+            </button>
           </div>
         ) : (
-          <img 
-            src={thumbnail} 
-            alt={video.name} 
-            className="video-thumbnail" 
-          />
+          <>
+            {loading || !thumbnail ? (
+              <div className="video-placeholder">
+                <div className="play-icon">▶</div>
+              </div>
+            ) : (
+              <img 
+                src={thumbnail} 
+                alt={video.name} 
+                className="video-thumbnail" 
+              />
+            )}
+            <div className="thumbnail-overlay">
+              <div className="play-icon">▶</div>
+            </div>
+            <span className="file-type">{video.name.split('.').pop().toUpperCase()}</span>
+          </>
         )}
-        <span className="file-type">{video.name.split('.').pop().toUpperCase()}</span>
       </div>
       <div className="video-info">
         <h3>{video.name}</h3>
@@ -105,10 +228,16 @@ const VideoCard = ({ video, playVideo, createCollage }) => {
           {(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}
         </p>
         <div className="video-actions">
-          <button onClick={() => playVideo(video)}>
-            Play
-          </button>
-          <button onClick={() => createCollage(video)}>
+          {expanded ? (
+            <button onClick={() => setExpanded(false)}>
+              Close Player
+            </button>
+          ) : (
+            <button onClick={handleVideoClick}>
+              Play
+            </button>
+          )}
+          <button onClick={(e) => { e.stopPropagation(); createCollage(video); }}>
             Create Collage
           </button>
         </div>
@@ -385,7 +514,10 @@ function VideoCatalog() {
     }
   };
 
-  // View an image
+  // State for selected image viewer
+  const [selectedImage, setSelectedImage] = useState(null);
+  
+  // View an image in the modal viewer
   const viewImage = async (item) => {
     if (item.type !== 'image') return;
     
@@ -401,8 +533,11 @@ function VideoCatalog() {
         url = URL.createObjectURL(file);
       }
       
-      // Open the image in a new tab/window
-      window.open(url, '_blank');
+      // Set the selected image for the modal
+      setSelectedImage({
+        ...item,
+        url
+      });
     } catch (err) {
       setError(`Error viewing image: ${err.message}`);
     }
@@ -642,21 +777,11 @@ function VideoCatalog() {
                   <h2 className="section-title">Images</h2>
                   <div className="image-grid">
                     {images.map(image => (
-                      <div 
+                      <ImageCard 
                         key={image.id} 
-                        className="image-card"
-                        onClick={() => viewImage(image)}
-                      >
-                        <div className="image-placeholder">
-                          <div className="image-icon">🖼️</div>
-                        </div>
-                        <div className="image-info">
-                          <p className="image-name">{image.name}</p>
-                          <p className="file-details">
-                            {(image.size / (1024 * 1024)).toFixed(2)} MB
-                          </p>
-                        </div>
-                      </div>
+                        image={image}
+                        viewImage={viewImage}
+                      />
                     ))}
                   </div>
                 </div>
@@ -685,12 +810,49 @@ function VideoCatalog() {
                   Close
                 </button>
               </div>
-              <video 
-                ref={videoPlayerRef}
-                className="video-player"
-                controls
-                src={selectedVideo.url}
-              />
+              <div className="fullscreen-player-wrapper">
+                <ReactPlayer
+                  ref={videoPlayerRef}
+                  url={selectedVideo.url}
+                  className="react-player"
+                  width="100%"
+                  height="100%"
+                  playing={true}
+                  controls={true}
+                  config={{
+                    file: {
+                      attributes: {
+                        controlsList: 'nodownload',
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          
+          {/* Image Viewer */}
+          {selectedImage && (
+            <div className="image-viewer-container">
+              <div className="image-viewer-header">
+                <h3>{selectedImage.name}</h3>
+                <button 
+                  className="close-button"
+                  onClick={() => {
+                    URL.revokeObjectURL(selectedImage.url);
+                    setSelectedImage(null);
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="image-viewer-content">
+                <img 
+                  src={selectedImage.url} 
+                  alt={selectedImage.name} 
+                  className="full-image"
+                />
+              </div>
             </div>
           )}
         </>
