@@ -66,71 +66,61 @@ const ImageCard = ({ image, viewImage }) => {
   );
 };
 
-// Very simple Video Card Component that plays the video when clicked
+// Extremely basic Video Card component
 const VideoCard = ({ video, createCollage }) => {
-  const [videoFile, setVideoFile] = useState(null);
-  const [videoUrl, setVideoUrl] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef(null);
+  const [videoSrc, setVideoSrc] = useState('');
   
-  // Handle video click - simply toggle play
-  const handleClick = async () => {
-    if (!videoUrl) {
+  // Load the video on mount
+  useEffect(() => {
+    async function loadVideo() {
       try {
+        // Get the file
         let file;
-        
         if (video.isLegacyFile && video.file) {
-          // Safari fallback
           file = video.file;
         } else {
-          // File System Access API
           file = await video.handle.getFile();
         }
         
-        setVideoFile(file);
+        // Create object URL
         const url = URL.createObjectURL(file);
-        setVideoUrl(url);
-        setIsPlaying(true);
-      } catch (err) {
-        console.error('Error loading video:', err);
+        setVideoSrc(url);
+        
+        // Cleanup
+        return () => {
+          URL.revokeObjectURL(url);
+        };
+      } catch (error) {
+        console.error("Failed to load video:", error);
       }
-    } else {
-      // Already have URL, just toggle play state
-      setIsPlaying(!isPlaying);
+    }
+    
+    loadVideo();
+  }, [video]);
+  
+  // Simple play toggle
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+      } else {
+        videoRef.current.pause();
+      }
     }
   };
   
-  // Clean up resources when component unmounts
-  useEffect(() => {
-    return () => {
-      if (videoUrl) {
-        URL.revokeObjectURL(videoUrl);
-      }
-    };
-  }, [videoUrl]);
-  
   return (
     <div className="video-card">
-      <div 
-        className="thumbnail-container"
-        onClick={handleClick}
-      >
-        {isPlaying && videoUrl ? (
-          <video
-            src={videoUrl}
-            controls
-            autoPlay
-            className="video-player"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        ) : (
-          <>
-            <div className="video-placeholder">
-              <div className="play-icon">▶</div>
-            </div>
-            <div className="thumbnail-overlay"></div>
-            <span className="file-type">{video.name.split('.').pop().toUpperCase()}</span>
-          </>
-        )}
+      <div className="thumbnail-container">
+        <video 
+          ref={videoRef} 
+          src={videoSrc}
+          onClick={togglePlay}
+          controls
+          preload="metadata"
+          style={{width: '100%', height: '100%', objectFit: 'contain'}}
+        />
       </div>
       <div className="video-info">
         <h3>{video.name}</h3>
@@ -138,10 +128,10 @@ const VideoCard = ({ video, createCollage }) => {
           {(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}
         </p>
         <div className="video-actions">
-          <button onClick={handleClick}>
-            {isPlaying ? 'Pause' : 'Play'}
+          <button onClick={togglePlay}>
+            Play/Pause
           </button>
-          <button onClick={(e) => { e.stopPropagation(); createCollage(video); }}>
+          <button onClick={() => createCollage(video)}>
             Create Collage
           </button>
         </div>
