@@ -57,8 +57,8 @@ function VideoCatalog() {
       setCurrentDirectoryName(dirHandle.name);
       setDirectoryPath([{ name: dirHandle.name, handle: dirHandle }]);
       
-      // Store the directory ID for later use
-      localStorage.setItem('selectedDirectoryId', dirHandle.name);
+      // We don't store the directory ID anymore since we can't restore it
+      // for security reasons in the File System Access API
       
       // Load the directory contents
       setIsLoading(true);
@@ -489,39 +489,14 @@ function VideoCatalog() {
     };
   }, [isViewingImage, nextImage, prevImage]);
   
-  // Effect to check for stored directory ID on component mount
+  // Effect to check for stored directory ID on component mount 
+  // We're not attempting to restore directory permissions since
+  // the File System Access API doesn't support this for security reasons
   useEffect(() => {
-    const restorePreviousDirectory = async () => {
-      try {
-        const storedDirId = localStorage.getItem('selectedDirectoryId');
-        
-        if (storedDirId && USE_FILE_SYSTEM_ACCESS_API) {
-          setIsLoading(true);
-          
-          // Check if we have permission to access the file system
-          if ('showDirectoryPicker' in window) {
-            try {
-              // For security reasons, we can't directly reopen a directory
-              // The user will need to select it again
-              // This is just a placeholder
-              setError("Your previously selected directory cannot be automatically reopened. Please select a directory again.");
-            } catch (err) {
-              console.error('Error restoring directory access:', err);
-              setError(`Error restoring directory access: ${err.message}`);
-            }
-          } else {
-            setError("This browser doesn't support the File System Access API. Please use the legacy file input method.");
-          }
-          
-          setIsLoading(false);
-        }
-      } catch (err) {
-        console.error('Error restoring previous directory:', err);
-        setIsLoading(false);
-      }
-    };
-    
-    restorePreviousDirectory();
+    // Clean up any stale localStorage data to prevent confusion
+    if (localStorage.getItem('selectedDirectoryId')) {
+      localStorage.removeItem('selectedDirectoryId');
+    }
   }, []);
   
   // Function to render image viewer content
@@ -638,11 +613,7 @@ function VideoCatalog() {
           {isLoading ? (
             <div className="loading-container">
               <div className="loading-spinner"></div>
-              <p>
-                {localStorage.getItem('selectedDirectoryId') && !directoryHandle ? 
-                 "Attempting to restore your previous directory selection..." :
-                 "Loading directory contents..."}
-              </p>
+              <p>Loading directory contents...</p>
             </div>
           ) : error ? (
             <div className="error-message">
