@@ -28,35 +28,98 @@ function VideoCatalog() {
     return 'showDirectoryPicker' in window;
   };
 
-  // Open directory picker
-  const handleSelectDirectory = async () => {
-    if (!isFileSystemAccessSupported()) {
-      setError('Your browser does not support the File System Access API. Please use Chrome, Edge, or another supported browser.');
-      return;
-    }
+  // Handle file input for Safari and other browsers without File System Access API
+  const handleFileInputSelection = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
 
+    setIsLoading(true);
+    setError(null);
+    
     try {
-      setIsLoading(true);
-      setError(null);
+      const items = [];
       
-      // Show directory picker
-      const dirHandle = await window.showDirectoryPicker({
-        mode: 'read'
+      // Process each file
+      files.forEach(file => {
+        if (supportedVideoTypes.includes(file.type)) {
+          // It's a video file
+          items.push({
+            id: Math.random().toString(36).substr(2, 9),
+            name: file.name,
+            type: 'video',
+            file: file, // Store the actual file for Safari
+            fileType: file.type,
+            size: file.size,
+            lastModified: new Date(file.lastModified).toLocaleDateString(),
+            duration: 'Unknown',
+            path: file.name,
+            isLegacyFile: true // Flag to indicate this is from file input, not directory API
+          });
+        } else if (supportedImageTypes.includes(file.type)) {
+          // It's an image file
+          items.push({
+            id: Math.random().toString(36).substr(2, 9),
+            name: file.name,
+            type: 'image',
+            file: file, // Store the actual file for Safari
+            fileType: file.type,
+            size: file.size,
+            lastModified: new Date(file.lastModified).toLocaleDateString(),
+            path: file.name,
+            isLegacyFile: true // Flag to indicate this is from file input, not directory API
+          });
+        }
       });
       
-      setDirectoryHandle(dirHandle);
-      setCurrentDirectory(dirHandle.name);
-      setCurrentPath([dirHandle.name]);
+      // Sort by name
+      items.sort((a, b) => a.name.localeCompare(b.name));
       
-      // Scan the directory
-      await scanDirectory(dirHandle);
+      // Set the directory items
+      setDirectoryItems(items);
+      setCurrentDirectory('Selected Files');
+      setCurrentPath(['Selected Files']);
     } catch (err) {
-      // User cancelled or error occurred
-      if (err.name !== 'AbortError') {
-        setError(`Error accessing directory: ${err.message}`);
-      }
+      setError(`Error processing files: ${err.message}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Open directory picker
+  const handleSelectDirectory = async () => {
+    if (isFileSystemAccessSupported()) {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Show directory picker
+        const dirHandle = await window.showDirectoryPicker({
+          mode: 'read'
+        });
+        
+        setDirectoryHandle(dirHandle);
+        setCurrentDirectory(dirHandle.name);
+        setCurrentPath([dirHandle.name]);
+        
+        // Scan the directory
+        await scanDirectory(dirHandle);
+      } catch (err) {
+        // User cancelled or error occurred
+        if (err.name !== 'AbortError') {
+          setError(`Error accessing directory: ${err.message}`);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // Safari fallback: use file input with 'webkitdirectory' attribute when possible
+      // or just allow multiple file selection
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true; // Allow selecting multiple files
+      input.accept = supportedVideoTypes.concat(supportedImageTypes).join(',');
+      input.onchange = handleFileInputSelection;
+      input.click();
     }
   };
 
@@ -172,8 +235,16 @@ function VideoCatalog() {
     if (item.type !== 'video') return;
     
     try {
-      const file = await item.handle.getFile();
-      const url = URL.createObjectURL(file);
+      let url;
+      
+      if (item.isLegacyFile && item.file) {
+        // Safari fallback: use the file directly
+        url = URL.createObjectURL(item.file);
+      } else {
+        // File System Access API
+        const file = await item.handle.getFile();
+        url = URL.createObjectURL(file);
+      }
       
       setSelectedVideo({
         ...item,
@@ -196,8 +267,16 @@ function VideoCatalog() {
     if (item.type !== 'image') return;
     
     try {
-      const file = await item.handle.getFile();
-      const url = URL.createObjectURL(file);
+      let url;
+      
+      if (item.isLegacyFile && item.file) {
+        // Safari fallback: use the file directly
+        url = URL.createObjectURL(item.file);
+      } else {
+        // File System Access API
+        const file = await item.handle.getFile();
+        url = URL.createObjectURL(file);
+      }
       
       // Open the image in a new tab/window
       window.open(url, '_blank');
@@ -211,8 +290,16 @@ function VideoCatalog() {
     if (item.type !== 'video') return;
     
     try {
-      const file = await item.handle.getFile();
-      const url = URL.createObjectURL(file);
+      let url;
+      
+      if (item.isLegacyFile && item.file) {
+        // Safari fallback: use the file directly
+        url = URL.createObjectURL(item.file);
+      } else {
+        // File System Access API
+        const file = await item.handle.getFile();
+        url = URL.createObjectURL(file);
+      }
       
       // Store the video URL in localStorage
       localStorage.setItem('collageVideos', JSON.stringify([{
@@ -260,16 +347,21 @@ function VideoCatalog() {
         </div>
       </header>
 
-      {!directoryHandle ? (
+      {!directoryHandle && directoryItems.length === 0 ? (
         <div className="empty-state">
-          <h2>No Directory Selected</h2>
-          <p>Select a directory to begin browsing your video and photo collection.</p>
+          <h2>No Files Selected</h2>
+          <p>
+            {isFileSystemAccessSupported() 
+              ? "Select a directory to begin browsing your video and photo collection." 
+              : "Select video and photo files to view in the catalog."}
+          </p>
           <button onClick={handleSelectDirectory} className="primary-button">
-            Select Directory
+            {isFileSystemAccessSupported() ? "Select Directory" : "Select Files"}
           </button>
           {!isFileSystemAccessSupported() && (
-            <p className="warning">
-              Your browser does not support the File System Access API. Please use Chrome, Edge, or another supported browser.
+            <p className="note">
+              Note: Your browser (Safari or other) doesn't support directory browsing. 
+              You can still select multiple files at once instead.
             </p>
           )}
         </div>

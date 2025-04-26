@@ -78,6 +78,15 @@
   font-weight: 500;
 }
 
+.empty-state .note {
+  color: #1976D2;
+  margin-top: 1rem;
+  font-style: italic;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .directory-navigation {
   display: flex;
   align-items: center;
