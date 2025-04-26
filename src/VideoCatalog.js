@@ -901,15 +901,17 @@ function VideoCatalog() {
             <div className="image-viewer-container">
               <div className="image-viewer-header">
                 <h3>{selectedImage.name}</h3>
-                <button 
-                  className="close-button"
-                  onClick={() => {
-                    URL.revokeObjectURL(selectedImage.url);
-                    setSelectedImage(null);
-                  }}
-                >
-                  Close
-                </button>
+                <div>
+                  <button 
+                    className="close-button"
+                    onClick={() => {
+                      URL.revokeObjectURL(selectedImage.url);
+                      setSelectedImage(null);
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
               <div className="image-viewer-content">
                 <img 
@@ -917,6 +919,29 @@ function VideoCatalog() {
                   alt={selectedImage.name} 
                   className="full-image"
                 />
+                
+                {/* Navigation controls */}
+                <div className="image-viewer-nav">
+                  <button 
+                    className="image-nav-button"
+                    onClick={viewPreviousImage}
+                    title="Previous image (Left arrow key)"
+                  >
+                    &#10094;
+                  </button>
+                  <button 
+                    className="image-nav-button"
+                    onClick={viewNextImage}
+                    title="Next image (Right arrow key)"
+                  >
+                    &#10095;
+                  </button>
+                </div>
+                
+                {/* Image counter */}
+                <div className="image-counter">
+                  {currentImageIndex + 1} / {allImages.length}
+                </div>
               </div>
             </div>
           )}

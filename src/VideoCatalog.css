@@ -567,12 +567,13 @@
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.9);
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.95);
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  padding: 2rem;
+  padding: 1rem;
+  box-sizing: border-box;
 }
 
 .fullscreen-player-wrapper {
@@ -594,22 +595,80 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: auto;
+  overflow: hidden;
+  position: relative;
 }
 
 .full-image {
-  max-width: 90%;
-  max-height: 90%;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
+  display: block;
+  margin: 0 auto;
 }
 
-.video-player-header {
+.image-viewer-nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  z-index: 10;
+}
+
+.image-nav-button {
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s;
+}
+
+.image-nav-button:hover {
+  background-color: rgba(0, 0, 0, 0.7);
+  transform: scale(1.1);
+}
+
+/* Image counter */
+.image-counter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.video-player-header, .image-viewer-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
   color: white;
   width: 100%;
+}
+
+.image-viewer-header h3 {
+  margin: 0;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80%;
 }
 
 .video-header-info {
