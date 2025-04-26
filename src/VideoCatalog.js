@@ -215,14 +215,19 @@ const VideoCard = ({ video, playVideo, createCollage }) => {
                 <div className="play-icon">▶</div>
               </div>
             ) : (
-              <img 
-                src={thumbnail} 
-                alt={video.name} 
-                className="video-thumbnail" 
-              />
+              <>
+                <img 
+                  src={thumbnail} 
+                  alt={video.name} 
+                  className="video-thumbnail" 
+                />
+                <div className="play-button-center">
+                  <div className="play-icon">▶</div>
+                </div>
+              </>
             )}
             <div className="thumbnail-overlay">
-              <div className="play-icon">▶</div>
+              {/* Semi-transparent overlay on hover */}
             </div>
             <span className="file-type">{video.name.split('.').pop().toUpperCase()}</span>
           </>

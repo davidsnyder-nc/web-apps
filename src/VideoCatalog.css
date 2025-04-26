@@ -257,6 +257,7 @@
   background-color: rgba(0, 0, 0, 0.3);
   opacity: 0;
   transition: opacity 0.3s ease;
+  pointer-events: none; /* Let clicks pass through to the container */
 }
 
 .thumbnail-container:hover .thumbnail-overlay {
@@ -275,6 +276,22 @@
   justify-content: center;
 }
 
+.play-button-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0.8;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.thumbnail-container:hover .play-button-center {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
 .file-type {
   position: absolute;
   bottom: 8px;
@@ -284,6 +301,7 @@
   padding: 3px 6px;
   border-radius: 4px;
   font-size: 0.8rem;
+  pointer-events: none; /* Allow clicks to pass through */
 }
 
 .video-info {
