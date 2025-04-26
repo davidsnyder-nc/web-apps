@@ -592,6 +592,19 @@ function VideoCatalog() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   
+  // Function to truncate file names if they're too long
+  const truncateFileName = (name, maxLength = 28) => {
+    if (!name) return '';
+    if (name.length <= maxLength) return name;
+    
+    const extension = name.lastIndexOf('.') > 0 ? name.slice(name.lastIndexOf('.')) : '';
+    const nameWithoutExt = name.slice(0, name.lastIndexOf('.') > 0 ? name.lastIndexOf('.') : name.length);
+    
+    // Keep the beginning and end of the name, replacing the middle with ...
+    const truncatedName = nameWithoutExt.slice(0, maxLength - 5 - extension.length) + '...' + nameWithoutExt.slice(-2) + extension;
+    return truncatedName;
+  };
+  
   // Filter items by search term
   const filteredItems = directoryItems.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase())

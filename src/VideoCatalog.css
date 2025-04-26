@@ -248,10 +248,33 @@
   text-overflow: ellipsis;
 }
 
+.simple-video-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.video-expand-button {
+  background-color: #f1f1f1;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.video-expand-button:hover {
+  background-color: #e0e0e0;
+}
+
 .simple-video-select {
   display: flex;
   align-items: center;
-  margin-left: 10px;
 }
 
 /* Hide the default checkbox */
@@ -304,6 +327,26 @@
   margin: 10px 0;
   border-radius: 4px;
   overflow: hidden;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.simple-video-player-container.expanded {
+  margin: 15px 0;
+}
+
+.simple-video-card.expanded {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background-color: #f9f9f9;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.video-expanded-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
 }
 
 .simple-loading, .simple-error {
