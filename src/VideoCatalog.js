@@ -66,11 +66,13 @@ const ImageCard = ({ image, viewImage }) => {
   );
 };
 
-// Video Card Component with Thumbnail Generation and Inline Playback
-const VideoCard = ({ video, playVideo, createCollage }) => {
+// Video Card Component with Direct Embedded Video Player
+const VideoCard = ({ video, currentVideoIndex, setCurrentVideoIndex, index, allVideos, createCollage }) => {
   const [thumbnail, setThumbnail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [videoUrl, setVideoUrl] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef(null);
   
   // Generate thumbnail on mount
   useEffect(() => {
@@ -146,51 +148,90 @@ const VideoCard = ({ video, playVideo, createCollage }) => {
     };
   }, [video]);
   
-  // Direct play in full screen mode when the card is clicked
-  const handleClick = () => {
-    console.log("Video clicked, opening full screen player");
-    if (videoUrl) {
-      playVideo(video); // Use the parent's playVideo method to open in fullscreen
+  // Handle play/pause toggle
+  const togglePlay = () => {
+    if (currentVideoIndex === index) {
+      // Already playing, toggle play/pause
+      setIsPlaying(!isPlaying);
     } else {
-      console.log("No video URL available");
+      // Start playing this video, stop others
+      setCurrentVideoIndex(index);
+      setIsPlaying(true);
     }
   };
   
+  // Auto-play next when video ends
+  const handleVideoEnd = () => {
+    console.log('Video ended, play next');
+    const nextIndex = (index + 1) % allVideos.length;
+    setCurrentVideoIndex(nextIndex);
+  };
+  
+  // Set the play state based on whether this card is the current video
+  useEffect(() => {
+    if (currentVideoIndex === index) {
+      setIsPlaying(true);
+    } else {
+      setIsPlaying(false);
+    }
+  }, [currentVideoIndex, index]);
+
   return (
-    <div className="video-card">
-      <div 
-        className="thumbnail-container"
-        onClick={handleClick}
-      >
-        {loading || !thumbnail ? (
-          <div className="video-placeholder">
-            <div className="play-icon">▶</div>
-          </div>
-        ) : (
-          <>
-            <img 
-              src={thumbnail} 
-              alt={video.name} 
-              className="video-thumbnail" 
-            />
-            <div className="play-button-center">
+    <div className={`video-card ${currentVideoIndex === index ? 'expanded' : ''}`}>
+      {videoUrl && currentVideoIndex === index ? (
+        <div className="video-player-wrapper">
+          <ReactPlayer
+            ref={videoRef}
+            url={videoUrl}
+            width="100%"
+            height="100%"
+            playing={isPlaying}
+            controls={true}
+            onEnded={handleVideoEnd}
+            config={{
+              file: {
+                attributes: {
+                  controlsList: 'nodownload',
+                }
+              }
+            }}
+          />
+        </div>
+      ) : (
+        <div 
+          className="thumbnail-container"
+          onClick={togglePlay}
+        >
+          {loading || !thumbnail ? (
+            <div className="video-placeholder">
               <div className="play-icon">▶</div>
             </div>
-          </>
-        )}
-        <div className="thumbnail-overlay">
-          {/* Semi-transparent overlay on hover */}
+          ) : (
+            <>
+              <img 
+                src={thumbnail} 
+                alt={video.name} 
+                className="video-thumbnail" 
+              />
+              <div className="play-button-center">
+                <div className="play-icon">▶</div>
+              </div>
+            </>
+          )}
+          <div className="thumbnail-overlay">
+            {/* Semi-transparent overlay on hover */}
+          </div>
+          <span className="file-type">{video.name.split('.').pop().toUpperCase()}</span>
         </div>
-        <span className="file-type">{video.name.split('.').pop().toUpperCase()}</span>
-      </div>
+      )}
       <div className="video-info">
         <h3>{video.name}</h3>
         <p className="file-details">
           {(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}
         </p>
         <div className="video-actions">
-          <button onClick={handleClick}>
-            Play
+          <button onClick={togglePlay}>
+            {currentVideoIndex === index && isPlaying ? 'Pause' : 'Play'}
           </button>
           <button onClick={(e) => { e.stopPropagation(); createCollage(video); }}>
             Create Collage
@@ -776,8 +817,16 @@ function VideoCatalog() {
                 <div className="content-section">
                   <h2 className="section-title">Videos</h2>
                   <div className="video-grid">
-                    {videos.map(video => (
-                      <VideoCard key={video.id} video={video} playVideo={playVideo} createCollage={createCollage} />
+                    {videos.map((video, index) => (
+                      <VideoCard 
+                        key={video.id} 
+                        video={video}
+                        currentVideoIndex={currentVideoIndex}
+                        setCurrentVideoIndex={setCurrentVideoIndex}
+                        index={index}
+                        allVideos={videos}
+                        createCollage={createCollage} 
+                      />
                     ))}
                   </div>
                 </div>
@@ -826,6 +875,9 @@ function VideoCatalog() {
                 <button 
                   className="close-button"
                   onClick={() => {
+                    if (videoPlayerRef.current) {
+                      videoPlayerRef.current.pause();
+                    }
                     URL.revokeObjectURL(selectedVideo.url);
                     setSelectedVideo(null);
                     setCurrentVideoIndex(-1);
@@ -836,7 +888,6 @@ function VideoCatalog() {
               </div>
               <div className="fullscreen-player-wrapper">
                 <ReactPlayer
-                  ref={videoPlayerRef}
                   url={selectedVideo.url}
                   className="react-player"
                   width="100%"
