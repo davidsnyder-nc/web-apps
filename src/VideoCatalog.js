@@ -499,30 +499,30 @@ function VideoCatalog() {
     }
   }, []);
   
-  // Function to render image viewer content
-  const renderImageViewer = () => {
+  // Separate Image Viewer Component to avoid hooks in render
+  const ImageViewer = React.memo(({ image }) => {
     const [imageUrl, setImageUrl] = useState(null);
     
     // Load the image when component mounts
     useEffect(() => {
-      if (!currentImage) return;
+      if (!image) return;
       
       const loadImage = async () => {
-        if (currentImage.objectUrl) {
-          setImageUrl(currentImage.objectUrl);
+        if (image.objectUrl) {
+          setImageUrl(image.objectUrl);
           return;
         }
         
         try {
           let url;
-          if (currentImage.isLegacyFile && currentImage.file) {
-            url = URL.createObjectURL(currentImage.file);
+          if (image.isLegacyFile && image.file) {
+            url = URL.createObjectURL(image.file);
           } else {
-            const file = await currentImage.handle.getFile();
+            const file = await image.handle.getFile();
             url = URL.createObjectURL(file);
           }
           
-          currentImage.objectUrl = url;
+          image.objectUrl = url;
           setImageUrl(url);
         } catch (err) {
           console.error('Error loading image:', err);
@@ -531,7 +531,14 @@ function VideoCatalog() {
       };
       
       loadImage();
-    }, [currentImage]);
+      
+      // Cleanup
+      return () => {
+        if (imageUrl && !image.objectUrl) {
+          URL.revokeObjectURL(imageUrl);
+        }
+      };
+    }, [image]);
     
     if (!imageUrl) {
       return <div className="loading-spinner"></div>;
@@ -540,11 +547,53 @@ function VideoCatalog() {
     return (
       <img 
         src={imageUrl} 
-        alt={currentImage.name} 
+        alt={image.name} 
         className="full-image"
       />
     );
-  };
+  });
+  
+  // Separate Image Thumbnail Component to avoid hooks in render
+  const ImageThumbnail = React.memo(({ image }) => {
+    const [thumbnail, setThumbnail] = useState(null);
+    
+    useEffect(() => {
+      // Load thumbnail when component mounts
+      const loadThumbnail = async () => {
+        try {
+          let file;
+          if (image.isLegacyFile && image.file) {
+            file = image.file;
+          } else if (image.handle) {
+            file = await image.handle.getFile();
+          }
+          
+          if (file) {
+            setThumbnail(URL.createObjectURL(file));
+          }
+        } catch (err) {
+          console.error('Error loading thumbnail:', err);
+        }
+      };
+      
+      loadThumbnail();
+      return () => {
+        if (thumbnail) {
+          URL.revokeObjectURL(thumbnail);
+        }
+      };
+    }, [image.id]);
+    
+    return thumbnail ? (
+      <img 
+        src={thumbnail} 
+        alt={image.name}
+        className="image-thumbnail" 
+      />
+    ) : (
+      <div className="image-icon">🖼️</div>
+    );
+  });
   
   return (
     <div className="video-catalog">
@@ -713,51 +762,7 @@ function VideoCatalog() {
                           onClick={() => openImage(allImages.findIndex(img => img.id === image.id))}
                         >
                           <div className="image-placeholder">
-                            {/* Using a dynamic thumbnail approach for better performance */}
-                            {(() => {
-                              const [thumbnail, setThumbnail] = useState(null);
-                              
-                              useEffect(() => {
-                                // Load thumbnail when component mounts
-                                const loadThumbnail = async () => {
-                                  try {
-                                    let file;
-                                    if (image.isLegacyFile && image.file) {
-                                      file = image.file;
-                                    } else if (image.handle) {
-                                      file = await image.handle.getFile();
-                                    }
-                                    
-                                    if (file) {
-                                      setThumbnail(URL.createObjectURL(file));
-                                    }
-                                  } catch (err) {
-                                    console.error('Error loading thumbnail:', err);
-                                  }
-                                };
-                                
-                                loadThumbnail();
-                                return () => {
-                                  if (thumbnail) {
-                                    URL.revokeObjectURL(thumbnail);
-                                  }
-                                };
-                              }, [image.id]);
-                              
-                              return (
-                                <>
-                                  {thumbnail ? (
-                                    <img 
-                                      src={thumbnail} 
-                                      alt={image.name}
-                                      className="image-thumbnail" 
-                                    />
-                                  ) : (
-                                    <div className="image-icon">🖼️</div>
-                                  )}
-                                </>
-                              );
-                            })()}
+                            <ImageThumbnail image={image} />
                             
                             <span className="file-type">{image.name.split('.').pop().toUpperCase()}</span>
                             
@@ -873,7 +878,7 @@ function VideoCatalog() {
               
               <div className="image-viewer-content">
                 {/* Viewer content */}
-                {renderImageViewer()}
+                <ImageViewer image={currentImage} />
                 
                 {/* Navigation buttons */}
                 <div className="image-viewer-nav">
