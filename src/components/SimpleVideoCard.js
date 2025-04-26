@@ -2,8 +2,14 @@ import React, { useState, useEffect } from 'react';
 
 /**
  * A simple video card component that displays a video with native HTML5 player
+ * and includes a checkbox for selecting videos for a collage
  */
-const SimpleVideoCard = ({ video, createCollage }) => {
+const SimpleVideoCard = ({ 
+  video, 
+  isSelected, 
+  onSelectChange, 
+  createCollage = null 
+}) => {
   const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -45,11 +51,27 @@ const SimpleVideoCard = ({ video, createCollage }) => {
     };
   }, [video]);
 
+  // Handle checkbox change
+  const handleCheckboxChange = (e) => {
+    onSelectChange(video.id, e.target.checked);
+  };
+
   return (
     <div className="simple-video-card">
-      <div className="simple-video-info">
-        <h3>{video.name}</h3>
-        <p>{(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}</p>
+      <div className="simple-video-header">
+        <div className="simple-video-title">
+          <h3>{video.name}</h3>
+          <p>{(video.size / (1024 * 1024)).toFixed(2)} MB • {video.lastModified}</p>
+        </div>
+        <div className="simple-video-select">
+          <input 
+            type="checkbox" 
+            checked={isSelected} 
+            onChange={handleCheckboxChange}
+            id={`select-video-${video.id}`}
+          />
+          <label htmlFor={`select-video-${video.id}`}>Select for collage</label>
+        </div>
       </div>
       
       <div className="simple-video-player-container">
@@ -68,14 +90,17 @@ const SimpleVideoCard = ({ video, createCollage }) => {
         )}
       </div>
       
-      <div className="simple-video-actions">
-        <button 
-          onClick={() => createCollage(video)}
-          className="simple-button"
-        >
-          Create Collage
-        </button>
-      </div>
+      {/* Create Collage button is optional now and only shown if provided */}
+      {createCollage && (
+        <div className="simple-video-actions">
+          <button 
+            onClick={() => createCollage(video)}
+            className="simple-button"
+          >
+            Create Collage
+          </button>
+        </div>
+      )}
     </div>
   );
 };

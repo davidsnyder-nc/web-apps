@@ -149,8 +149,8 @@ function VideoCatalog() {
   const [error, setError] = useState(null);
   const videoPlayerRef = useRef(null);
   const [selectedVideo, setSelectedVideo] = useState(null);
-  // Track current video index for autoplay next feature
-  const [currentVideoIndex, setCurrentVideoIndex] = useState(-1);
+  // Track videos selected for collage
+  const [selectedVideosForCollage, setSelectedVideosForCollage] = useState([]);
   const [hasPermission, setHasPermission] = useState(false);
   
   // Define supported file types
@@ -404,27 +404,51 @@ function VideoCatalog() {
     }
   };
 
-  // Create a video collage from selected videos - we're keeping this function
-  const createCollage = async (item) => {
-    if (item.type !== 'video') return;
+  // Toggle video selection for collage
+  const toggleVideoSelection = (videoId, isSelected) => {
+    if (isSelected) {
+      // Add to selected videos
+      setSelectedVideosForCollage(prevSelected => [...prevSelected, videoId]);
+    } else {
+      // Remove from selected videos
+      setSelectedVideosForCollage(prevSelected => 
+        prevSelected.filter(id => id !== videoId)
+      );
+    }
+  };
+  
+  // Create a video collage from all selected videos
+  const createCollageFromSelected = async () => {
+    if (selectedVideosForCollage.length === 0) return;
     
     try {
-      let url;
+      // Find all selected video objects
+      const selectedVideos = videos.filter(video => 
+        selectedVideosForCollage.includes(video.id)
+      );
       
-      if (item.isLegacyFile && item.file) {
-        // Safari fallback: use the file directly
-        url = URL.createObjectURL(item.file);
-      } else {
-        // File System Access API
-        const file = await item.handle.getFile();
-        url = URL.createObjectURL(file);
-      }
+      // Process each video to get URLs
+      const collageVideos = await Promise.all(selectedVideos.map(async (video) => {
+        let url;
+        
+        if (video.isLegacyFile && video.file) {
+          // Safari fallback: use the file directly
+          url = URL.createObjectURL(video.file);
+        } else {
+          // File System Access API
+          const file = await video.handle.getFile();
+          url = URL.createObjectURL(file);
+        }
+        
+        return {
+          id: video.id,
+          name: video.name,
+          url
+        };
+      }));
       
-      // Store the video URL in localStorage
-      localStorage.setItem('collageVideos', JSON.stringify([{
-        id: item.id,
-        url
-      }]));
+      // Store the video URLs in localStorage
+      localStorage.setItem('collageVideos', JSON.stringify(collageVideos));
       
       // Redirect to video collage app
       window.location.href = '/video-collage';
@@ -566,6 +590,15 @@ function VideoCatalog() {
               Reset Selection
             </button>
           )}
+          {videos.length > 0 && (
+            <button 
+              onClick={createCollageFromSelected}
+              disabled={selectedVideosForCollage.length === 0}
+              className="create-collage-button"
+            >
+              Create Collage ({selectedVideosForCollage.length})
+            </button>
+          )}
         </div>
       </header>
 
@@ -664,7 +697,8 @@ function VideoCatalog() {
                       <SimpleVideoCard 
                         key={video.id} 
                         video={video}
-                        createCollage={createCollage} 
+                        isSelected={selectedVideosForCollage.includes(video.id)}
+                        onSelectChange={toggleVideoSelection}
                       />
                     ))}
                   </div>
