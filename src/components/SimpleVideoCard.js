@@ -93,7 +93,7 @@ const SimpleVideoCard = ({
             controls
             width="100%" 
             height="auto"
-            style={{ maxHeight: '250px', backgroundColor: 'black' }}
+            style={{ maxHeight: '400px', backgroundColor: 'black' }}
           />
         )}
       </div>

@@ -459,6 +459,7 @@ function VideoCatalog() {
 
   // State for selected image viewer
   const [selectedImage, setSelectedImage] = useState(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
   // View an image in the modal viewer
   const viewImage = async (item) => {
@@ -476,6 +477,10 @@ function VideoCatalog() {
         url = URL.createObjectURL(file);
       }
       
+      // Find the index of the selected image
+      const imageIndex = allImages.findIndex(img => img.id === item.id);
+      setCurrentImageIndex(imageIndex);
+      
       // Set the selected image for the modal
       setSelectedImage({
         ...item,
@@ -485,9 +490,108 @@ function VideoCatalog() {
       setError(`Error viewing image: ${err.message}`);
     }
   };
+  
+  // Navigate to previous image
+  const viewPreviousImage = async () => {
+    if (!selectedImage) return;
+    
+    const prevIndex = (currentImageIndex - 1 + allImages.length) % allImages.length;
+    const prevImage = allImages[prevIndex];
+    
+    // Clean up current image URL
+    if (selectedImage.url) {
+      URL.revokeObjectURL(selectedImage.url);
+    }
+    
+    // Load the previous image
+    try {
+      let url;
+      if (prevImage.isLegacyFile && prevImage.file) {
+        url = URL.createObjectURL(prevImage.file);
+      } else {
+        const file = await prevImage.handle.getFile();
+        url = URL.createObjectURL(file);
+      }
+      
+      setCurrentImageIndex(prevIndex);
+      setSelectedImage({
+        ...prevImage,
+        url
+      });
+    } catch (err) {
+      setError(`Error viewing previous image: ${err.message}`);
+    }
+  };
+  
+  // Navigate to next image
+  const viewNextImage = async () => {
+    if (!selectedImage) return;
+    
+    const nextIndex = (currentImageIndex + 1) % allImages.length;
+    const nextImage = allImages[nextIndex];
+    
+    // Clean up current image URL
+    if (selectedImage.url) {
+      URL.revokeObjectURL(selectedImage.url);
+    }
+    
+    // Load the next image
+    try {
+      let url;
+      if (nextImage.isLegacyFile && nextImage.file) {
+        url = URL.createObjectURL(nextImage.file);
+      } else {
+        const file = await nextImage.handle.getFile();
+        url = URL.createObjectURL(file);
+      }
+      
+      setCurrentImageIndex(nextIndex);
+      setSelectedImage({
+        ...nextImage,
+        url
+      });
+    } catch (err) {
+      setError(`Error viewing next image: ${err.message}`);
+    }
+  };
+  
+  // Handle keyboard navigation in image viewer
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!selectedImage) return;
+      
+      switch (e.key) {
+        case 'ArrowLeft':
+          viewPreviousImage();
+          break;
+        case 'ArrowRight':
+          viewNextImage();
+          break;
+        case 'Escape':
+          // Close image viewer
+          if (selectedImage.url) {
+            URL.revokeObjectURL(selectedImage.url);
+          }
+          setSelectedImage(null);
+          break;
+        default:
+          break;
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedImage, currentImageIndex]);
 
 
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  
   // Filter items by search term
   const filteredItems = directoryItems.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -495,8 +599,19 @@ function VideoCatalog() {
 
   // Group items by type
   const directories = filteredItems.filter(item => item.type === 'directory');
-  const videos = filteredItems.filter(item => item.type === 'video');
-  const images = filteredItems.filter(item => item.type === 'image');
+  const allVideos = filteredItems.filter(item => item.type === 'video');
+  const allImages = filteredItems.filter(item => item.type === 'image');
+  
+  // Calculate total pages for videos and images
+  const totalVideoPages = Math.ceil(allVideos.length / itemsPerPage);
+  const totalImagePages = Math.ceil(allImages.length / itemsPerPage);
+  
+  // Get paginated videos and images
+  const startVideoIndex = (currentPage - 1) * itemsPerPage;
+  const startImageIndex = (currentPage - 1) * itemsPerPage;
+  
+  const videos = allVideos.slice(startVideoIndex, startVideoIndex + itemsPerPage);
+  const images = allImages.slice(startImageIndex, startImageIndex + itemsPerPage);
 
   // Try to restore previously selected directory from localStorage on component mount
   useEffect(() => {
@@ -689,9 +804,9 @@ function VideoCatalog() {
               )}
 
               {/* Videos */}
-              {videos.length > 0 && (
+              {allVideos.length > 0 && (
                 <div className="content-section">
-                  <h2 className="section-title">Videos</h2>
+                  <h2 className="section-title">Videos ({allVideos.length})</h2>
                   <div className="video-grid">
                     {videos.map((video) => (
                       <SimpleVideoCard 
@@ -702,13 +817,38 @@ function VideoCatalog() {
                       />
                     ))}
                   </div>
+                  
+                  {/* Pagination controls for videos */}
+                  {totalVideoPages > 1 && (
+                    <div className="pagination-controls">
+                      <button 
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        className="pagination-button"
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </button>
+                      
+                      <div className="pagination-info">
+                        Page {currentPage} of {totalVideoPages}
+                      </div>
+                      
+                      <button 
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalVideoPages))}
+                        className="pagination-button"
+                        disabled={currentPage === totalVideoPages}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Images */}
-              {images.length > 0 && (
+              {allImages.length > 0 && (
                 <div className="content-section">
-                  <h2 className="section-title">Images</h2>
+                  <h2 className="section-title">Images ({allImages.length})</h2>
                   <div className="image-grid">
                     {images.map(image => (
                       <ImageCard 
@@ -718,6 +858,31 @@ function VideoCatalog() {
                       />
                     ))}
                   </div>
+                  
+                  {/* Pagination controls for images */}
+                  {totalImagePages > 1 && (
+                    <div className="pagination-controls">
+                      <button 
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        className="pagination-button"
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </button>
+                      
+                      <div className="pagination-info">
+                        Page {currentPage} of {totalImagePages}
+                      </div>
+                      
+                      <button 
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalImagePages))}
+                        className="pagination-button"
+                        disabled={currentPage === totalImagePages}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
